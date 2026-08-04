@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Metalquip — Cronograma de Produção</title>
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-kicker">Metalquip · Carga Máquina</div>
+        <h1>Cronograma de Produção</h1>
+        <p>Acabado + Componente · status por Dia Operação</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" id="btnReload" class="secondary">Recarregar CSVs</button>
+        <button type="button" id="btnExport" disabled>Exportar cronograma</button>
+      </div>
+    </header>
+
+    <main>
+      <div id="statusBanner" class="status-banner">Carregando Acabado.csv e Componente.csv…</div>
+
+      <section class="kpis" id="kpis" aria-label="Indicadores"></section>
+
+      <section class="filters" id="filters" aria-label="Filtros">
+        <div class="filter-group">
+          <label for="fTipo">Tipo</label>
+          <select id="fTipo" class="select">
+            <option value="">Todos</option>
+            <option value="acabado">Acabado</option>
+            <option value="componente">Componente</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="fSetor">Setor da Fábrica</label>
+          <select id="fSetor" class="select"><option value="">Todos</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="fPosto">Posto de Trabalho</label>
+          <select id="fPosto" class="select"><option value="">Todos</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="fOperador">Nome do Operador</label>
+          <select id="fOperador" class="select"><option value="">Todos</option></select>
+        </div>
+        <div class="filter-group">
+          <label for="fStatus">Status</label>
+          <select id="fStatus" class="select">
+            <option value="">Todos</option>
+            <option value="aberto">Aberto</option>
+            <option value="fechada">Fechada</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="fWeeks">Horizonte (semanas)</label>
+          <select id="fWeeks" class="select">
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="fHours">Horas/dia por posto</label>
+          <input id="fHours" class="input" type="number" min="1" max="24" step="0.5" value="8" />
+        </div>
+        <div class="filter-group">
+          <label for="fStart">Início do cronograma</label>
+          <input id="fStart" class="input" type="date" />
+        </div>
+        <div class="filter-group">
+          <label for="fSearch">Busca (OS / item)</label>
+          <input id="fSearch" class="input" type="search" placeholder="OS, código ou descrição" />
+        </div>
+      </section>
+
+      <nav class="tabs" role="tablist">
+        <button type="button" class="tab active" data-tab="resumo">Resumo por setor</button>
+        <button type="button" class="tab" data-tab="carga">Carga por posto</button>
+        <button type="button" class="tab" data-tab="ops">Operações</button>
+        <button type="button" class="tab" data-tab="cronograma">Cronograma semanal</button>
+      </nav>
+
+      <section id="tab-resumo" class="panel tab-panel">
+        <div class="panel-head">
+          <h2>Setor → Posto → Operador</h2>
+          <span class="muted" id="resumoMeta"></span>
+        </div>
+        <div class="panel-body" id="resumoTree"></div>
+      </section>
+
+      <section id="tab-carga" class="panel tab-panel hidden">
+        <div class="panel-head">
+          <h2>Horas abertas vs. capacidade do horizonte</h2>
+          <span class="muted" id="cargaMeta"></span>
+        </div>
+        <div class="panel-body padded" id="cargaList"></div>
+      </section>
+
+      <section id="tab-ops" class="panel tab-panel hidden">
+        <div class="panel-head">
+          <h2>Lista de operações</h2>
+          <span class="muted" id="opsMeta"></span>
+        </div>
+        <div class="panel-body table-wrap" id="opsTable"></div>
+      </section>
+
+      <section id="tab-cronograma" class="panel tab-panel hidden">
+        <div class="panel-head">
+          <h2>Grade semanal por setor (operações abertas)</h2>
+          <span class="muted" id="cronMeta"></span>
+        </div>
+        <div class="panel-body" id="cronGrid"></div>
+      </section>
+    </main>
+
+    <script src="js/parse.js"></script>
+    <script src="js/schedule.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
