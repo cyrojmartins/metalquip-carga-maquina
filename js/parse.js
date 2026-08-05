@@ -107,7 +107,8 @@ function durationMinutes(iniciou, terminou) {
 }
 
 /**
- * Tempo unitário apontado: (Terminou − Iniciou) / Qtde.Final.
+ * Tempo unitário apontado em segundos:
+ * ((Terminou − Iniciou) / Qtde.Final) × 60.
  * Só para operações fechadas com quantidade e horários válidos.
  */
 function tempoUnitarioApontado(row) {
@@ -115,7 +116,7 @@ function tempoUnitarioApontado(row) {
   if (!(row.qtdeFinal > 0)) return null;
   const dur = durationMinutes(row.iniciou, row.terminou);
   if (dur == null) return null;
-  return dur / row.qtdeFinal;
+  return (dur / row.qtdeFinal) * 60;
 }
 
 function normalizeRow(raw, tipo) {

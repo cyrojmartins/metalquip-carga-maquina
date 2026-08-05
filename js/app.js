@@ -214,7 +214,7 @@ function renderResumo() {
               <div class="num">Tempo unit.</div>
               <div class="num">Tempo total</div>
               <div class="num">Qtde Final</div>
-              <div class="num" title="(Terminou − Início) ÷ Qtde.Final">Tempo/un. real</div>
+              <div class="num" title="((Terminou − Início) ÷ Qtde.Final) × 60 — segundos">Tempo/un. real (s)</div>
             </div>`
           : `
             <div class="tree-ops-row header">
@@ -349,7 +349,7 @@ function renderOps() {
     .join("");
 
   const apontadoHeaders = showApontado
-    ? `<th>Início</th><th>Término</th><th>Qtde Final</th><th title="(Terminou − Início) ÷ Qtde.Final">Tempo/un. real</th>`
+    ? `<th>Início</th><th>Término</th><th>Qtde Final</th><th title="((Terminou − Início) ÷ Qtde.Final) × 60 — segundos">Tempo/un. real (s)</th>`
     : "";
 
   $("opsTable").innerHTML = `
