@@ -267,21 +267,34 @@ function renderResumo() {
 function renderCarga() {
   const weeks = Number($("fWeeks").value) || 2;
   const hoursPerDay = Number($("fHours").value) || 8;
-  const capacity = weeks * 5 * hoursPerDay;
+  const capacityPerPosto = weeks * 5 * hoursPerDay;
 
-  const byPosto = new Map();
+  const bySetor = new Map();
   for (const r of state.filtered) {
     if (r.status !== "aberto") continue;
-    if (!byPosto.has(r.posto)) {
-      byPosto.set(r.posto, { posto: r.posto, setor: r.setor, horas: 0, ops: 0 });
+    if (!bySetor.has(r.setor)) {
+      bySetor.set(r.setor, {
+        setor: r.setor,
+        horas: 0,
+        ops: 0,
+        postos: new Set(),
+      });
     }
-    const x = byPosto.get(r.posto);
+    const x = bySetor.get(r.setor);
     x.horas += r.tempoHoras;
     x.ops += 1;
+    x.postos.add(r.posto);
   }
 
-  const list = [...byPosto.values()].sort((a, b) => b.horas - a.horas);
-  $("cargaMeta").textContent = `Capacidade: ${fmtHours(capacity)} por posto (${weeks} sem. × 5 dias × ${hoursPerDay} h)`;
+  const list = [...bySetor.values()]
+    .map((item) => ({
+      ...item,
+      nPostos: item.postos.size,
+      capacity: capacityPerPosto * Math.max(1, item.postos.size),
+    }))
+    .sort((a, b) => b.horas - a.horas);
+
+  $("cargaMeta").textContent = `Capacidade: ${fmtHours(capacityPerPosto)} por posto × nº de postos do setor (${weeks} sem. × 5 dias × ${hoursPerDay} h)`;
 
   if (!list.length) {
     $("cargaList").innerHTML = `<div class="empty">Sem operações abertas no filtro.</div>`;
@@ -290,16 +303,16 @@ function renderCarga() {
 
   $("cargaList").innerHTML = `<div class="load-list">${list
     .map((item) => {
-      const pct = capacity > 0 ? Math.min(100, (100 * item.horas) / capacity) : 0;
-      const over = item.horas > capacity;
+      const pct = item.capacity > 0 ? Math.min(100, (100 * item.horas) / item.capacity) : 0;
+      const over = item.horas > item.capacity;
       return `
         <div class="load-item">
           <div>
-            <div class="load-name" title="${escapeAttr(item.posto)}">${escapeHtml(item.posto)}</div>
-            <div class="muted" style="font-size:0.75rem">${escapeHtml(item.setor)}</div>
+            <div class="load-name" title="${escapeAttr(item.setor)}">${escapeHtml(item.setor)}</div>
+            <div class="muted" style="font-size:0.75rem">${fmtNum(item.nPostos)} posto${item.nPostos === 1 ? "" : "s"}</div>
           </div>
           <div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>
-          <div class="load-meta">${fmtHours(item.horas)} / ${fmtHours(capacity)} · ${fmtNum(item.ops)} ops${over ? " · sobrecarga" : ""}</div>
+          <div class="load-meta">${fmtHours(item.horas)} / ${fmtHours(item.capacity)} · ${fmtNum(item.ops)} ops${over ? " · sobrecarga" : ""}</div>
         </div>`;
     })
     .join("")}</div>`;
