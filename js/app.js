@@ -10,6 +10,7 @@ const state = {
   expandedPostos: new Set(),
   expandedOperadores: new Set(),
   operadoresPorSetor: {},
+  expandedCargaSetores: new Set(),
   activeTab: "resumo",
 };
 
@@ -274,6 +275,7 @@ function renderCarga() {
   const weeks = Number($("fWeeks").value) || 2;
   const hoursPerDay = Number($("fHours").value) || 8;
   const capacityPerOperador = weeks * 5 * hoursPerDay;
+  const osSearch = ($("fCargaOs")?.value || "").trim().toLowerCase();
 
   const bySetor = new Map();
   for (const r of state.filtered) {
@@ -284,30 +286,60 @@ function renderCarga() {
         horas: 0,
         ops: 0,
         postos: new Set(),
+        operacoes: [],
       });
     }
     const x = bySetor.get(r.setor);
     x.horas += r.tempoHoras;
     x.ops += 1;
     x.postos.add(r.posto);
+    x.operacoes.push({
+      osFull: r.osFull,
+      codigo: r.codigo,
+      descricao: r.descricao,
+      qtdLote: r.qtdLote,
+      tempoUnit: r.tempoMin,
+      tempoTotal: r.qtdLote * r.tempoMin,
+    });
   }
 
-  const list = [...bySetor.values()]
+  let list = [...bySetor.values()]
     .map((item) => {
       const operadores = getOperadoresSetor(item.setor);
+      let operacoes = [...item.operacoes].sort(
+        (a, b) =>
+          b.tempoTotal - a.tempoTotal ||
+          String(a.osFull).localeCompare(String(b.osFull), "pt-BR")
+      );
+      if (osSearch) {
+        operacoes = operacoes.filter((op) => {
+          const hay = `${op.osFull} ${op.codigo} ${op.descricao}`.toLowerCase();
+          return hay.includes(osSearch);
+        });
+      }
       return {
         ...item,
         nPostos: item.postos.size,
         operadores,
         capacity: capacityPerOperador * operadores,
+        operacoes,
       };
     })
     .sort((a, b) => b.horas - a.horas);
 
+  if (osSearch) {
+    list = list.filter((item) => item.operacoes.length > 0);
+    for (const item of list) state.expandedCargaSetores.add(item.setor);
+  }
+
   $("cargaMeta").textContent = `Capacidade: ${fmtHours(capacityPerOperador)} por operador × qtde operadores (${weeks} sem. × 5 dias × ${hoursPerDay} h)`;
 
   if (!list.length) {
-    $("cargaList").innerHTML = `<div class="empty">Sem operações abertas no filtro.</div>`;
+    $("cargaList").innerHTML = `<div class="empty">${
+      osSearch
+        ? "Nenhuma OS encontrada com o filtro atual."
+        : "Sem operações abertas no filtro."
+    }</div>`;
     return;
   }
 
@@ -315,25 +347,59 @@ function renderCarga() {
     .map((item) => {
       const pct = item.capacity > 0 ? Math.min(100, (100 * item.horas) / item.capacity) : 0;
       const over = item.horas > item.capacity;
-      return `
-        <div class="load-item" data-setor="${escapeAttr(item.setor)}" data-horas="${item.horas}" data-ops="${item.ops}" data-cap-base="${capacityPerOperador}">
-          <div class="load-info">
-            <div class="load-name" title="${escapeAttr(item.setor)}">${escapeHtml(item.setor)}</div>
-            <label class="ops-field">
-              <span>Qtde operadores</span>
-              <input
-                type="number"
-                class="ops-input"
-                min="1"
-                step="1"
-                value="${item.operadores}"
-                data-ops-setor="${escapeAttr(item.setor)}"
-                aria-label="Quantidade de operadores — ${escapeAttr(item.setor)}"
-              />
-            </label>
+      const open = state.expandedCargaSetores.has(item.setor);
+      const opsTable = open
+        ? `
+        <div class="tree-ops-wrap carga-ops">
+          <div class="tree-ops-row header">
+            <div>Nº OS</div>
+            <div>Código</div>
+            <div>Descrição</div>
+            <div class="num">Qtde Lote</div>
+            <div class="num">Tempo unit.</div>
+            <div class="num">Tempo total</div>
           </div>
-          <div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>
-          <div class="load-meta">${fmtHours(item.horas)} / ${fmtHours(item.capacity)} · ${fmtNum(item.ops)} ops${over ? " · sobrecarga" : ""}</div>
+          ${item.operacoes
+            .map(
+              (row) => `
+            <div class="tree-ops-row">
+              <div class="mono" title="${escapeAttr(row.osFull)}">${escapeHtml(row.osFull)}</div>
+              <div class="mono" title="${escapeAttr(row.codigo)}">${escapeHtml(row.codigo)}</div>
+              <div class="wrap" title="${escapeAttr(row.descricao)}">${escapeHtml(row.descricao)}</div>
+              <div class="num">${fmtNum(row.qtdLote, 1)}</div>
+              <div class="num">${fmtNum(row.tempoUnit, 2)}</div>
+              <div class="num">${fmtNum(row.tempoTotal, 2)}</div>
+            </div>`
+            )
+            .join("")}
+        </div>`
+        : "";
+
+      return `
+        <div class="load-block">
+          <div class="load-item" data-setor="${escapeAttr(item.setor)}" data-horas="${item.horas}" data-ops="${item.ops}" data-cap-base="${capacityPerOperador}">
+            <div class="load-info">
+              <button type="button" class="load-toggle" data-expand-carga-setor="${escapeAttr(item.setor)}" aria-expanded="${open}">
+                <span class="toggle">${open ? "−" : "+"}</span>
+                <span class="load-name" title="${escapeAttr(item.setor)}">${escapeHtml(item.setor)}</span>
+              </button>
+              <label class="ops-field">
+                <span>Qtde operadores</span>
+                <input
+                  type="number"
+                  class="ops-input"
+                  min="1"
+                  step="1"
+                  value="${item.operadores}"
+                  data-ops-setor="${escapeAttr(item.setor)}"
+                  aria-label="Quantidade de operadores — ${escapeAttr(item.setor)}"
+                />
+              </label>
+            </div>
+            <div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>
+            <div class="load-meta">${fmtHours(item.horas)} / ${fmtHours(item.capacity)} · ${fmtNum(item.ops)} ops${over ? " · sobrecarga" : ""}</div>
+          </div>
+          ${opsTable}
         </div>`;
     })
     .join("")}</div>`;
@@ -663,6 +729,18 @@ function bindEvents() {
   $("cargaList").addEventListener("change", (e) => {
     const input = e.target.closest("[data-ops-setor]");
     if (input) updateCargaItemFromInput(input);
+  });
+  $("cargaList").addEventListener("click", (e) => {
+    if (e.target.closest("[data-ops-setor]")) return;
+    const btn = e.target.closest("[data-expand-carga-setor]");
+    if (!btn) return;
+    const key = btn.getAttribute("data-expand-carga-setor");
+    if (state.expandedCargaSetores.has(key)) state.expandedCargaSetores.delete(key);
+    else state.expandedCargaSetores.add(key);
+    renderCarga();
+  });
+  $("fCargaOs").addEventListener("input", () => {
+    if (state.activeTab === "carga") renderCarga();
   });
 
   $("btnReload").addEventListener("click", () => loadData());
