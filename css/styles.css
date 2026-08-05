@@ -632,13 +632,61 @@ table.data tr:hover td {
   padding: 1rem;
 }
 
-.schedule-posto:last-child {
-  border-bottom: none;
-}
-
 .schedule-posto h3 {
   margin: 0 0 0.75rem;
   font-size: 0.95rem;
+}
+
+.setor-resumo {
+  padding: 0.75rem 1rem 1.15rem;
+  background: #eef1f4;
+  border-top: 1px solid var(--line);
+}
+
+.setor-resumo-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+}
+
+table.resumo-mensal {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  background: #e8ebef;
+}
+
+table.resumo-mensal th,
+table.resumo-mensal td {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #c5ccd5;
+  text-align: left;
+}
+
+table.resumo-mensal th {
+  background: #d5dde6;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 700;
+}
+
+table.resumo-mensal td.num,
+table.resumo-mensal th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.resumo-mensal td.setor-col {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+table.resumo-mensal tr.resumo-total td {
+  background: #dfe5eb;
+  border-top: 2px solid #aeb6c0;
 }
 
 .schedule-days {

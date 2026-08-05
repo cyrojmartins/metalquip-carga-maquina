@@ -543,6 +543,109 @@ function renderDayChips(days) {
     .join("");
 }
 
+const MES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** Resumo mensal de OS abertas do setor (emissão → qtde e tempo em segundos). */
+function buildResumoMensalSetor(setorNome) {
+  const tipo = $("fTipo").value;
+  const posto = $("fPosto").value;
+  const rows = state.allRows.filter((r) => {
+    if (r.status !== "aberto") return false;
+    if (r.setor !== setorNome) return false;
+    if (tipo && r.tipo !== tipo) return false;
+    if (posto && r.posto !== posto) return false;
+    return true;
+  });
+
+  const byMonth = new Map(); // key yyyy-mm
+  for (const r of rows) {
+    if (!r.emissao) continue;
+    const y = r.emissao.getFullYear();
+    const m = r.emissao.getMonth();
+    const key = `${y}-${String(m + 1).padStart(2, "0")}`;
+    if (!byMonth.has(key)) {
+      byMonth.set(key, {
+        key,
+        year: y,
+        month: m,
+        label: MES_ABREV[m],
+        osSet: new Set(),
+        tempoSeg: 0,
+      });
+    }
+    const x = byMonth.get(key);
+    x.osSet.add(r.osFull || r.osBase);
+    x.tempoSeg += r.tempoMin * 60;
+  }
+
+  const months = [...byMonth.values()]
+    .map((m) => ({
+      key: m.key,
+      year: m.year,
+      month: m.month,
+      label: m.label,
+      qtdeOs: m.osSet.size,
+      tempoSeg: m.tempoSeg,
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const totalQtde = months.reduce((a, m) => a + m.qtdeOs, 0);
+  const totalSeg = months.reduce((a, m) => a + m.tempoSeg, 0);
+  return { setor: setorNome, months, totalQtde, totalSeg, semEmissao: rows.filter((r) => !r.emissao).length };
+}
+
+function renderResumoMensalSetor(setorNome) {
+  const resumo = buildResumoMensalSetor(setorNome);
+  if (!resumo.months.length) {
+    return `
+      <div class="setor-resumo">
+        <div class="setor-resumo-title">Resumo — ${escapeHtml(setorNome)}</div>
+        <div class="empty" style="padding:0.75rem">Sem OS abertas com emissão para resumir.</div>
+      </div>`;
+  }
+
+  const years = new Set(resumo.months.map((m) => m.year));
+  const showYear = years.size > 1;
+
+  const body = resumo.months
+    .map((m, idx) => {
+      const mesLabel = showYear ? `${m.label}/${String(m.year).slice(2)}` : m.label;
+      const setorCell =
+        idx === 0
+          ? `<td class="setor-col" rowspan="${resumo.months.length}">${escapeHtml(resumo.setor)}</td>`
+          : "";
+      return `
+      <tr>
+        ${setorCell}
+        <td>${escapeHtml(mesLabel)}</td>
+        <td class="num">${fmtNum(m.qtdeOs, 2)}</td>
+        <td class="num">${fmtNum(m.tempoSeg, 2)}</td>
+      </tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="setor-resumo">
+      <table class="resumo-mensal">
+        <thead>
+          <tr>
+            <th>Setor da Fábrica</th>
+            <th>Meses</th>
+            <th class="num">Qtde OS Aberta</th>
+            <th class="num">T. Produção Seg.</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${body}
+          <tr class="resumo-total">
+            <td colspan="2"><strong>${escapeHtml(resumo.setor)} Total</strong></td>
+            <td class="num"><strong>${fmtNum(resumo.totalQtde, 2)}</strong></td>
+            <td class="num"><strong>${fmtNum(resumo.totalSeg, 2)}</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
 function renderCronograma() {
   const hoursPerDay = Number($("fHours").value) || 8;
   const sch = ensureSchedule();
@@ -573,6 +676,7 @@ function renderCronograma() {
           <div class="schedule-posto">
             <div class="schedule-days">${renderDayChips(setor.days)}</div>
           </div>
+          ${renderResumoMensalSetor(setor.setor)}
         </section>`;
     })
     .join("");
