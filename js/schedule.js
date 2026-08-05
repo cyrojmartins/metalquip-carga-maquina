@@ -1,5 +1,6 @@
 /**
- * Agendamento heurístico das operações abertas por posto.
+ * Agendamento heurístico das operações abertas por setor.
+ * Capacidade diária do setor = (horas/dia por posto) × qtde de postos do setor.
  */
 
 function startOfDay(d) {
@@ -46,7 +47,7 @@ function weekdayLabel(d) {
  * @param {object} options
  * @param {Date} options.startDate
  * @param {number} options.weeks - horizonte em semanas
- * @param {number} options.hoursPerDay - capacidade diária por posto
+ * @param {number} options.hoursPerDay - capacidade diária por posto (somada no setor)
  * @param {string|null} options.postoFilter
  */
 function buildSchedule(allRows, options) {
@@ -58,7 +59,7 @@ function buildSchedule(allRows, options) {
   } = options;
 
   const workDays = nextWeekdays(startDate, weeks * 5);
-  const capacityMin = hoursPerDay * 60;
+  const capacityPerPostoMin = hoursPerDay * 60;
 
   // precedência: seq N-1 fechada ou já agendada
   const byOs = new Map();
@@ -87,13 +88,23 @@ function buildSchedule(allRows, options) {
     return a.seq - b.seq;
   });
 
-  // remaining capacity per posto per day (minutes)
-  const remaining = new Map(); // posto -> number[]
-  const postos = [...new Set(openOps.map((r) => r.posto))].sort();
-  for (const p of postos) {
+  // postos por setor → capacidade diária do setor
+  const postosPorSetor = new Map();
+  for (const op of openOps) {
+    if (!postosPorSetor.has(op.setor)) postosPorSetor.set(op.setor, new Set());
+    postosPorSetor.get(op.setor).add(op.posto);
+  }
+
+  const capacityMinBySetor = new Map();
+  const remaining = new Map(); // setor -> minutos restantes por dia
+  const setores = [...postosPorSetor.keys()].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  for (const s of setores) {
+    const nPostos = postosPorSetor.get(s).size || 1;
+    const dayCap = capacityPerPostoMin * nPostos;
+    capacityMinBySetor.set(s, dayCap);
     remaining.set(
-      p,
-      workDays.map(() => capacityMin)
+      s,
+      workDays.map(() => dayCap)
     );
   }
 
@@ -118,7 +129,8 @@ function buildSchedule(allRows, options) {
         i++;
         continue;
       }
-      const caps = remaining.get(op.posto);
+      const caps = remaining.get(op.setor);
+      const dayCap = capacityMinBySetor.get(op.setor) || capacityPerPostoMin;
       if (!caps) {
         i++;
         continue;
@@ -127,7 +139,7 @@ function buildSchedule(allRows, options) {
       for (let d = 0; d < workDays.length; d++) {
         const fits = caps[d] >= op.tempoMin;
         const oversizedTakesFullDay =
-          op.tempoMin > capacityMin && caps[d] === capacityMin;
+          op.tempoMin > dayCap && caps[d] === dayCap;
         if (!fits && !oversizedTakesFullDay) continue;
 
         caps[d] -= Math.min(op.tempoMin, caps[d]);
@@ -155,7 +167,32 @@ function buildSchedule(allRows, options) {
     });
   }
 
-  // group by posto -> day
+  // group by setor -> day
+  const bySetorMap = new Map();
+  for (const s of scheduled) {
+    if (!bySetorMap.has(s.setor)) {
+      bySetorMap.set(
+        s.setor,
+        workDays.map((d) => ({ data: d, label: weekdayLabel(d), ops: [], horas: 0 }))
+      );
+    }
+    const days = bySetorMap.get(s.setor);
+    days[s.diaIndex].ops.push(s);
+    days[s.diaIndex].horas += s.tempoHoras;
+  }
+
+  const bySetor = [...bySetorMap.entries()]
+    .map(([setor, days]) => ({
+      setor,
+      days,
+      nPostos: postosPorSetor.get(setor)?.size || 0,
+      capacityHorasDia: (capacityMinBySetor.get(setor) || capacityPerPostoMin) / 60,
+      totalHoras: days.reduce((a, d) => a + d.horas, 0),
+      totalOps: days.reduce((a, d) => a + d.ops.length, 0),
+    }))
+    .sort((a, b) => b.totalHoras - a.totalHoras || a.setor.localeCompare(b.setor, "pt-BR"));
+
+  // compat: byPosto derivado para quem ainda agrupa por posto na visualização auxiliar
   const byPosto = new Map();
   for (const s of scheduled) {
     if (!byPosto.has(s.posto)) {
@@ -173,6 +210,7 @@ function buildSchedule(allRows, options) {
     workDays,
     hoursPerDay,
     weeks,
+    bySetor,
     byPosto: [...byPosto.entries()]
       .map(([posto, days]) => ({
         posto,
@@ -205,10 +243,10 @@ function scheduleToCsv(schedule) {
   const sorted = [...schedule.scheduled].sort((a, b) => {
     const s = a.setor.localeCompare(b.setor, "pt-BR");
     if (s !== 0) return s;
-    const p = a.posto.localeCompare(b.posto, "pt-BR");
-    if (p !== 0) return p;
     const da = a.dataAgenda.getTime() - b.dataAgenda.getTime();
     if (da !== 0) return da;
+    const p = a.posto.localeCompare(b.posto, "pt-BR");
+    if (p !== 0) return p;
     return a.seq - b.seq;
   });
   for (const r of sorted) {
@@ -232,55 +270,41 @@ function scheduleToCsv(schedule) {
   return lines.join("\r\n");
 }
 
+/** Retorna blocos por setor com grade diária (capacidade compartilhada do setor). */
 function groupBySetor(schedule) {
-  const map = new Map();
-  for (const postoBlock of schedule.byPosto) {
-    // Separar ops do posto por setor (um posto pode atender mais de um)
-    const opsBySetor = new Map();
-    for (const day of postoBlock.days) {
-      for (const op of day.ops) {
-        if (!opsBySetor.has(op.setor)) opsBySetor.set(op.setor, []);
-        opsBySetor.get(op.setor).push(op);
-      }
-    }
-
-    for (const [setor, ops] of opsBySetor) {
-      if (!map.has(setor)) {
-        map.set(setor, {
-          setor,
-          postos: [],
-          totalOps: 0,
-          totalHoras: 0,
-        });
-      }
-      const days = schedule.workDays.map((d, idx) => {
-        const dayOps = ops.filter((o) => o.diaIndex === idx);
-        return {
-          data: d,
-          label: weekdayLabel(d),
-          ops: dayOps,
-          horas: dayOps.reduce((a, o) => a + o.tempoHoras, 0),
-        };
-      });
-      const totalHoras = days.reduce((a, d) => a + d.horas, 0);
-      const totalOps = days.reduce((a, d) => a + d.ops.length, 0);
-      map.get(setor).postos.push({
-        posto: postoBlock.posto,
-        days,
-        totalHoras,
-        totalOps,
-      });
-      map.get(setor).totalHoras += totalHoras;
-      map.get(setor).totalOps += totalOps;
-    }
+  if (schedule.bySetor?.length) {
+    return schedule.bySetor.map((s) => ({
+      ...s,
+      postos: [],
+    }));
   }
 
-  return [...map.values()]
-    .map((s) => ({
-      ...s,
-      postos: s.postos.sort((a, b) => b.totalHoras - a.totalHoras),
-    }))
-    .sort((a, b) => b.totalHoras - a.totalHoras || a.setor.localeCompare(b.setor, "pt-BR"));
+  // fallback a partir de scheduled
+  const map = new Map();
+  for (const op of schedule.scheduled || []) {
+    if (!map.has(op.setor)) {
+      map.set(op.setor, {
+        setor: op.setor,
+        days: schedule.workDays.map((d) => ({
+          data: d,
+          label: weekdayLabel(d),
+          ops: [],
+          horas: 0,
+        })),
+        totalOps: 0,
+        totalHoras: 0,
+        postos: [],
+      });
+    }
+    const block = map.get(op.setor);
+    block.days[op.diaIndex].ops.push(op);
+    block.days[op.diaIndex].horas += op.tempoHoras;
+    block.totalOps += 1;
+    block.totalHoras += op.tempoHoras;
+  }
+  return [...map.values()].sort(
+    (a, b) => b.totalHoras - a.totalHoras || a.setor.localeCompare(b.setor, "pt-BR")
+  );
 }
 
 function scheduleToHtmlBySetor(schedule, meta = {}) {
@@ -290,46 +314,44 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
 
   const setoresHtml = bySetor
     .map((setor) => {
-      const postosHtml = setor.postos
-        .map((p) => {
-          const rows = [];
-          for (const day of p.days) {
-            for (const op of day.ops) {
-              rows.push(`<tr>
-                <td>${escapeHtml(day.label)}</td>
-                <td>${escapeHtml(op.dataAgendaRaw)}</td>
-                <td>${escapeHtml(op.osBase)}-${String(op.seq).padStart(2, "0")}</td>
-                <td>${escapeHtml(op.codigo)}</td>
-                <td>${escapeHtml(op.descricao)}</td>
-                <td>${escapeHtml(op.operacao)}</td>
-                <td class="num">${op.tempoHoras.toFixed(1).replace(".", ",")} h</td>
-                <td>${escapeHtml(op.tipo)}</td>
-              </tr>`);
-            }
-          }
-          if (!rows.length) return "";
-          return `
-            <h3>Posto: ${escapeHtml(p.posto)}
-              <span class="meta">${p.totalOps} ops · ${p.totalHoras.toFixed(1).replace(".", ",")} h</span>
-            </h3>
-            <table>
+      const rows = [];
+      for (const day of setor.days) {
+        for (const op of day.ops) {
+          rows.push(`<tr>
+            <td>${escapeHtml(day.label)}</td>
+            <td>${escapeHtml(op.dataAgendaRaw)}</td>
+            <td>${escapeHtml(op.osBase)}-${String(op.seq).padStart(2, "0")}</td>
+            <td>${escapeHtml(op.posto)}</td>
+            <td>${escapeHtml(op.codigo)}</td>
+            <td>${escapeHtml(op.descricao)}</td>
+            <td>${escapeHtml(op.operacao)}</td>
+            <td class="num">${op.tempoHoras.toFixed(1).replace(".", ",")} h</td>
+            <td>${escapeHtml(op.tipo)}</td>
+          </tr>`);
+        }
+      }
+      const cap =
+        setor.capacityHorasDia != null
+          ? ` · capac. ${setor.capacityHorasDia.toFixed(1).replace(".", ",")} h/dia`
+          : "";
+      return `
+        <section class="setor">
+          <h2>${escapeHtml(setor.setor)}
+            <span class="meta">${setor.totalOps} ops · ${setor.totalHoras.toFixed(1).replace(".", ",")} h${cap}</span>
+          </h2>
+          ${
+            rows.length
+              ? `<table>
               <thead>
                 <tr>
-                  <th>Dia</th><th>Data</th><th>OS</th><th>Código</th>
+                  <th>Dia</th><th>Data</th><th>OS</th><th>Posto</th><th>Código</th>
                   <th>Descrição</th><th>Operação</th><th>Tempo</th><th>Tipo</th>
                 </tr>
               </thead>
               <tbody>${rows.join("")}</tbody>
-            </table>`;
-        })
-        .join("");
-
-      return `
-        <section class="setor">
-          <h2>${escapeHtml(setor.setor)}
-            <span class="meta">${setor.totalOps} ops · ${setor.totalHoras.toFixed(1).replace(".", ",")} h</span>
-          </h2>
-          ${postosHtml || "<p class='empty'>Sem operações neste setor.</p>"}
+            </table>`
+              : "<p class='empty'>Sem operações neste setor.</p>"
+          }
         </section>`;
     })
     .join("");
@@ -344,8 +366,7 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
   h1{font-size:1.4rem;margin:0 0 .25rem;color:#2f4a63}
   .sub{color:#5c6570;margin-bottom:1.5rem}
   h2{background:#2f4a63;color:#fff;padding:.55rem .75rem;margin:1.5rem 0 .75rem;font-size:1.05rem;border-radius:4px}
-  h2 .meta,h3 .meta{font-weight:500;opacity:.85;font-size:.85rem;margin-left:.5rem}
-  h3{margin:1rem 0 .4rem;font-size:.95rem;color:#2f4a63;border-bottom:1px solid #c8ced6;padding-bottom:.3rem}
+  h2 .meta{font-weight:500;opacity:.85;font-size:.85rem;margin-left:.5rem}
   table{width:100%;border-collapse:collapse;margin-bottom:1rem}
   th,td{border:1px solid #c8ced6;padding:.35rem .45rem;text-align:left;vertical-align:top}
   th{background:#eef0f3;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:#5c6570}
@@ -356,7 +377,7 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
 </head>
 <body>
   <h1>${escapeHtml(titulo)}</h1>
-  <div class="sub">Gerado em ${escapeHtml(geradoEm)} · ${schedule.scheduled.length} operações · horizonte ${schedule.weeks} semana(s) · ${schedule.hoursPerDay} h/dia por posto</div>
+  <div class="sub">Gerado em ${escapeHtml(geradoEm)} · ${schedule.scheduled.length} operações · horizonte ${schedule.weeks} semana(s) · ${schedule.hoursPerDay} h/dia por posto (capacidade acumulada por setor)</div>
   ${setoresHtml || "<p class='empty'>Nenhuma operação agendada.</p>"}
 </body>
 </html>`;

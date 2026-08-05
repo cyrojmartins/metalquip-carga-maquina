@@ -523,10 +523,10 @@ function renderDayChips(days) {
         .slice(0, 12)
         .map(
           (op) => `
-        <div class="op-chip" title="${escapeAttr(op.descricao)}">
+        <div class="op-chip" title="${escapeAttr(op.descricao)} · ${escapeAttr(op.posto)}">
           <div class="os">${escapeHtml(op.osBase)}-${String(op.seq).padStart(2, "0")}</div>
           <div>${escapeHtml(op.operacao)}</div>
-          <div class="muted">${fmtHours(op.tempoHoras)} · ${escapeHtml(op.codigo)}</div>
+          <div class="muted">${fmtHours(op.tempoHoras)} · ${escapeHtml(op.posto)}</div>
         </div>`
         )
         .join("");
@@ -549,7 +549,7 @@ function renderCronograma() {
   const bySetor = window.CargaSchedule.groupBySetor(sch);
 
   $("btnExport").disabled = !sch.scheduled.length;
-  $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · ${fmtHours(hoursPerDay)}/dia`;
+  $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · ${fmtHours(hoursPerDay)}/posto (capac. por setor)`;
 
   if (!bySetor.length) {
     $("cronGrid").innerHTML = `<div class="empty">Nada a agendar no filtro/horizonte atual.</div>`;
@@ -558,22 +558,21 @@ function renderCronograma() {
 
   $("cronGrid").innerHTML = bySetor
     .map((setor) => {
-      const postosHtml = setor.postos
-        .map(
-          (p) => `
-        <div class="schedule-posto">
-          <h3>${escapeHtml(p.posto)} <span class="muted">· ${fmtNum(p.totalOps)} ops · ${fmtHours(p.totalHoras)}</span></h3>
-          <div class="schedule-days">${renderDayChips(p.days)}</div>
-        </div>`
-        )
-        .join("");
+      const cap =
+        setor.capacityHorasDia != null
+          ? ` · capac. ${fmtHours(setor.capacityHorasDia)}/dia`
+          : "";
+      const nPostos =
+        setor.nPostos != null ? ` · ${fmtNum(setor.nPostos)} postos` : "";
       return `
         <section class="schedule-setor">
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
-            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)}</span>
+            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)}${nPostos}${cap}</span>
           </div>
-          ${postosHtml}
+          <div class="schedule-posto">
+            <div class="schedule-days">${renderDayChips(setor.days)}</div>
+          </div>
         </section>`;
     })
     .join("");
