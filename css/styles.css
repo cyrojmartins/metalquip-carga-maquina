@@ -367,6 +367,10 @@ main {
   font-variant-numeric: tabular-nums;
 }
 
+.tree-ops-row.with-apontado {
+  grid-template-columns: minmax(100px, 1fr) minmax(80px, 0.8fr) minmax(120px, 1.4fr) repeat(5, minmax(64px, 0.65fr));
+}
+
 .tree-ops-row:last-child {
   border-bottom: none;
 }
@@ -624,6 +628,9 @@ table.data tr:hover td {
   }
   .tree-ops-row {
     min-width: 620px;
+  }
+  .tree-ops-row.with-apontado {
+    min-width: 820px;
   }
   .load-item {
     grid-template-columns: 1fr;

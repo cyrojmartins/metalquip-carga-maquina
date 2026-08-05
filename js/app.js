@@ -203,8 +203,20 @@ function renderResumo() {
 
         if (!oOpen) continue;
 
-        parts.push(`
-          <div class="tree-ops-wrap">
+        const showApontado = $("fStatus").value !== "aberto";
+        const opsHeader = showApontado
+          ? `
+            <div class="tree-ops-row header with-apontado">
+              <div>Nº OS</div>
+              <div>Código</div>
+              <div>Descrição</div>
+              <div class="num">Qtde Lote</div>
+              <div class="num">Tempo unit.</div>
+              <div class="num">Tempo total</div>
+              <div class="num">Qtde Final</div>
+              <div class="num" title="(Terminou − Início) ÷ Qtde.Final">Tempo/un. real</div>
+            </div>`
+          : `
             <div class="tree-ops-row header">
               <div>Nº OS</div>
               <div>Código</div>
@@ -212,19 +224,33 @@ function renderResumo() {
               <div class="num">Qtde Lote</div>
               <div class="num">Tempo unit.</div>
               <div class="num">Tempo total</div>
-            </div>
+            </div>`;
+
+        parts.push(`
+          <div class="tree-ops-wrap">
+            ${opsHeader}
             ${op.operacoes
-              .map(
-                (row) => `
-              <div class="tree-ops-row ${row.status}">
+              .map((row) => {
+                const apontadoCols = showApontado
+                  ? `
+                <div class="num">${row.status === "fechada" ? fmtNum(row.qtdeFinal, 1) : "—"}</div>
+                <div class="num">${
+                  row.tempoUnitApontado != null
+                    ? fmtNum(row.tempoUnitApontado, 2)
+                    : "—"
+                }</div>`
+                  : "";
+                return `
+              <div class="tree-ops-row ${row.status}${showApontado ? " with-apontado" : ""}">
                 <div class="mono" title="${escapeAttr(row.osFull)}">${escapeHtml(row.osFull)}</div>
                 <div class="mono" title="${escapeAttr(row.codigo)}">${escapeHtml(row.codigo)}</div>
                 <div class="wrap" title="${escapeAttr(row.descricao)}">${escapeHtml(row.descricao)}</div>
                 <div class="num">${fmtNum(row.qtdLote, 1)}</div>
                 <div class="num">${fmtNum(row.tempoUnit, 2)}</div>
                 <div class="num">${fmtNum(row.tempoTotal, 2)}</div>
-              </div>`
-              )
+                ${apontadoCols}
+              </div>`;
+              })
               .join("")}
           </div>`);
       }
@@ -281,6 +307,7 @@ function renderCarga() {
 
 function renderOps() {
   const rows = state.filtered.slice(0, 2000);
+  const showApontado = $("fStatus").value !== "aberto";
   $("opsMeta").textContent =
     state.filtered.length > 2000
       ? `Mostrando 2.000 de ${fmtNum(state.filtered.length)}`
@@ -292,8 +319,17 @@ function renderOps() {
   }
 
   const body = rows
-    .map(
-      (r) => `
+    .map((r) => {
+      const apontadoCells = showApontado
+        ? `
+      <td class="num">${r.status === "fechada" ? escapeHtml(r.iniciou || "—") : "—"}</td>
+      <td class="num">${r.status === "fechada" ? escapeHtml(r.terminou || "—") : "—"}</td>
+      <td class="num">${r.status === "fechada" ? fmtNum(r.qtdeFinal, 1) : "—"}</td>
+      <td class="num">${
+        r.tempoUnitApontado != null ? fmtNum(r.tempoUnitApontado, 2) : "—"
+      }</td>`
+        : "";
+      return `
     <tr>
       <td>${badge(r.status)}</td>
       <td>${escapeHtml(r.tipo)}</td>
@@ -307,9 +343,14 @@ function renderOps() {
       <td>${escapeHtml(r.setor)}</td>
       <td>${escapeHtml(r.operador || "—")}</td>
       <td>${escapeHtml(r.diaOperacaoRaw || "—")}</td>
-    </tr>`
-    )
+      ${apontadoCells}
+    </tr>`;
+    })
     .join("");
+
+  const apontadoHeaders = showApontado
+    ? `<th>Início</th><th>Término</th><th>Qtde Final</th><th title="(Terminou − Início) ÷ Qtde.Final">Tempo/un. real</th>`
+    : "";
 
   $("opsTable").innerHTML = `
     <table class="data">
@@ -318,6 +359,7 @@ function renderOps() {
           <th>Status</th><th>Tipo</th><th>Emissão</th><th>OS</th><th>Código</th>
           <th>Descrição</th><th>Operação</th><th>Tempo</th><th>Posto</th>
           <th>Setor</th><th>Operador</th><th>Dia Operação</th>
+          ${apontadoHeaders}
         </tr>
       </thead>
       <tbody>${body}</tbody>

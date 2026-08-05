@@ -85,6 +85,39 @@ function parseCsvLine(line) {
   return out;
 }
 
+function parseTimeToMinutes(value) {
+  const s = String(value ?? "").trim();
+  const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  const sec = Number(m[3] || 0);
+  if (h > 23 || min > 59 || sec > 59) return null;
+  return h * 60 + min + sec / 60;
+}
+
+/** Duração em minutos (Terminou − Iniciou). Aceita virada de dia. */
+function durationMinutes(iniciou, terminou) {
+  const start = parseTimeToMinutes(iniciou);
+  const end = parseTimeToMinutes(terminou);
+  if (start == null || end == null) return null;
+  let d = end - start;
+  if (d < 0) d += 24 * 60;
+  return d;
+}
+
+/**
+ * Tempo unitário apontado: (Terminou − Iniciou) / Qtde.Final.
+ * Só para operações fechadas com quantidade e horários válidos.
+ */
+function tempoUnitarioApontado(row) {
+  if (row.status !== "fechada") return null;
+  if (!(row.qtdeFinal > 0)) return null;
+  const dur = durationMinutes(row.iniciou, row.terminou);
+  if (dur == null) return null;
+  return dur / row.qtdeFinal;
+}
+
 function normalizeRow(raw, tipo) {
   const emissao = parseBrDate(raw["Emissão OS"]);
   const diaOp = parseBrDate(raw["Dia Operação"]);
@@ -101,6 +134,17 @@ function normalizeRow(raw, tipo) {
   const hasValidDia = diaOp && diaOp.date && !diaOp.invalid;
   const dataInvalida = Boolean(diaOp && diaOp.invalid);
   const status = hasValidDia ? "fechada" : "aberto";
+
+  const iniciou = String(raw["Iniciou"] ?? "").trim();
+  const terminou = String(raw["Terminou"] ?? "").trim();
+  const qtdeFinal = parseBrNumber(raw["Qtde.Final"]);
+  const duracaoMin = status === "fechada" ? durationMinutes(iniciou, terminou) : null;
+  const tempoUnitApontado = tempoUnitarioApontado({
+    status,
+    qtdeFinal,
+    iniciou,
+    terminou,
+  });
 
   return {
     tipo,
@@ -120,9 +164,11 @@ function normalizeRow(raw, tipo) {
     operador,
     diaOperacao: hasValidDia ? diaOp.date : null,
     diaOperacaoRaw: diaOp?.raw ?? "",
-    iniciou: String(raw["Iniciou"] ?? "").trim(),
-    terminou: String(raw["Terminou"] ?? "").trim(),
-    qtdeFinal: parseBrNumber(raw["Qtde.Final"]),
+    iniciou,
+    terminou,
+    qtdeFinal,
+    duracaoMin,
+    tempoUnitApontado,
     status,
     dataInvalida,
   };
@@ -214,8 +260,13 @@ function buildHierarchy(rows) {
       codigo: row.codigo,
       descricao: row.descricao,
       qtdLote: row.qtdLote,
+      qtdeFinal: row.qtdeFinal,
       tempoUnit,
       tempoTotal,
+      iniciou: row.iniciou,
+      terminou: row.terminou,
+      duracaoMin: row.duracaoMin,
+      tempoUnitApontado: row.tempoUnitApontado,
       status: row.status,
       tempoHoras: row.tempoHoras,
     });
@@ -258,4 +309,6 @@ window.CargaParse = {
   buildHierarchy,
   uniqueValues,
   parseBrDate,
+  durationMinutes,
+  tempoUnitarioApontado,
 };
