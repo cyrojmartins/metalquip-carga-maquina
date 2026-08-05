@@ -196,6 +196,7 @@ function buildHierarchy(rows) {
         aberto: 0,
         fechada: 0,
         horasAbertas: 0,
+        operacoes: [],
       });
     }
     const op = posto.operadores.get(opKey);
@@ -206,6 +207,18 @@ function buildHierarchy(rows) {
     } else {
       op.fechada += 1;
     }
+    const tempoUnit = row.tempoMin;
+    const tempoTotal = row.qtdLote * tempoUnit;
+    op.operacoes.push({
+      osFull: row.osFull,
+      codigo: row.codigo,
+      descricao: row.descricao,
+      qtdLote: row.qtdLote,
+      tempoUnit,
+      tempoTotal,
+      status: row.status,
+      tempoHoras: row.tempoHoras,
+    });
   }
 
   return [...setores.values()]
@@ -216,9 +229,18 @@ function buildHierarchy(rows) {
         .map((p) => ({
           ...p,
           pctFechado: p.total ? (100 * p.fechada) / p.total : 0,
-          operadores: [...p.operadores.values()].sort(
-            (a, b) => b.horasAbertas - a.horasAbertas || b.total - a.total
-          ),
+          operadores: [...p.operadores.values()]
+            .map((op) => ({
+              ...op,
+              operacoes: [...op.operacoes].sort(
+                (a, b) =>
+                  b.tempoTotal - a.tempoTotal ||
+                  String(a.osFull).localeCompare(String(b.osFull), "pt-BR")
+              ),
+            }))
+            .sort(
+              (a, b) => b.horasAbertas - a.horasAbertas || b.total - a.total
+            ),
         }))
         .sort((a, b) => b.horasAbertas - a.horasAbertas || b.total - a.total),
     }))

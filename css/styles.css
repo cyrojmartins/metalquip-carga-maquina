@@ -312,10 +312,12 @@ main {
 .tree-row.operador {
   padding-left: 2.75rem;
   color: var(--ink);
+  cursor: pointer;
 }
 
 .tree-row:hover.setor,
-.tree-row:hover.posto {
+.tree-row:hover.posto,
+.tree-row:hover.operador {
   background: var(--accent-soft);
 }
 
@@ -344,6 +346,63 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tree-ops-wrap {
+  margin: 0 1rem 0.5rem 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.tree-ops-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.1fr) minmax(90px, 0.9fr) minmax(140px, 1.6fr) repeat(3, minmax(70px, 0.7fr));
+  gap: 0.45rem;
+  align-items: start;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree-ops-row:last-child {
+  border-bottom: none;
+}
+
+.tree-ops-row.header {
+  background: var(--surface);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 700;
+  align-items: center;
+}
+
+.tree-ops-row .mono {
+  font-family: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Consolas, monospace;
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-ops-row .wrap {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+}
+
+.tree-ops-row.aberto .mono:first-child {
+  color: var(--warn, #b45309);
+}
+
+.tree-ops-row.fechada .mono:first-child {
+  color: var(--ok, #15803d);
 }
 
 .num {
@@ -558,6 +617,13 @@ table.data tr:hover td {
   }
   .tree-row .hide-sm {
     display: none;
+  }
+  .tree-ops-wrap {
+    margin-left: 1rem;
+    overflow-x: auto;
+  }
+  .tree-ops-row {
+    min-width: 620px;
   }
   .load-item {
     grid-template-columns: 1fr;

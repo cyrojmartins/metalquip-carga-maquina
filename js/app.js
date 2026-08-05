@@ -8,6 +8,7 @@ const state = {
   schedule: null,
   expandedSetores: new Set(),
   expandedPostos: new Set(),
+  expandedOperadores: new Set(),
   activeTab: "resumo",
 };
 
@@ -185,14 +186,46 @@ function renderResumo() {
       if (!pOpen) continue;
 
       for (const op of posto.operadores) {
+        const oKey = `${pKey}||${op.nome}`;
+        const oOpen = state.expandedOperadores.has(oKey);
         parts.push(`
-          <div class="tree-row operador">
-            <div class="tree-name"><span class="label-text">${escapeHtml(op.nome)}</span></div>
+          <div class="tree-row operador" data-expand-operador="${escapeAttr(oKey)}">
+            <div class="tree-name">
+              <span class="toggle">${oOpen ? "−" : "+"}</span>
+              <span class="label-text">${escapeHtml(op.nome)}</span>
+            </div>
             <div class="num">${fmtNum(op.total)}</div>
             <div class="num">${fmtNum(op.aberto)}</div>
             <div class="num">${fmtNum(op.fechada)}</div>
             <div class="num hide-sm">${fmtNum(op.total ? (100 * op.fechada) / op.total : 0, 0)}%</div>
             <div class="num">${fmtHours(op.horasAbertas)}</div>
+          </div>`);
+
+        if (!oOpen) continue;
+
+        parts.push(`
+          <div class="tree-ops-wrap">
+            <div class="tree-ops-row header">
+              <div>Nº OS</div>
+              <div>Código</div>
+              <div>Descrição</div>
+              <div class="num">Qtde Lote</div>
+              <div class="num">Tempo unit.</div>
+              <div class="num">Tempo total</div>
+            </div>
+            ${op.operacoes
+              .map(
+                (row) => `
+              <div class="tree-ops-row ${row.status}">
+                <div class="mono" title="${escapeAttr(row.osFull)}">${escapeHtml(row.osFull)}</div>
+                <div class="mono" title="${escapeAttr(row.codigo)}">${escapeHtml(row.codigo)}</div>
+                <div class="wrap" title="${escapeAttr(row.descricao)}">${escapeHtml(row.descricao)}</div>
+                <div class="num">${fmtNum(row.qtdLote, 1)}</div>
+                <div class="num">${fmtNum(row.tempoUnit, 2)}</div>
+                <div class="num">${fmtNum(row.tempoTotal, 2)}</div>
+              </div>`
+              )
+              .join("")}
           </div>`);
       }
     }
@@ -506,6 +539,14 @@ function bindEvents() {
       const key = postoEl.getAttribute("data-expand-posto");
       if (state.expandedPostos.has(key)) state.expandedPostos.delete(key);
       else state.expandedPostos.add(key);
+      renderResumo();
+      return;
+    }
+    const opEl = e.target.closest("[data-expand-operador]");
+    if (opEl) {
+      const key = opEl.getAttribute("data-expand-operador");
+      if (state.expandedOperadores.has(key)) state.expandedOperadores.delete(key);
+      else state.expandedOperadores.add(key);
       renderResumo();
     }
   });
