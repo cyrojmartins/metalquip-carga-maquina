@@ -425,9 +425,15 @@ main {
 
 .load-item {
   display: grid;
-  grid-template-columns: minmax(140px, 220px) 1fr auto;
+  grid-template-columns: minmax(160px, 240px) 1fr auto;
   gap: 0.75rem;
   align-items: center;
+}
+
+.load-info {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .load-name {
@@ -436,6 +442,35 @@ main {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ops-field {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.ops-field span {
+  white-space: nowrap;
+}
+
+.ops-input {
+  width: 3.4rem;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ops-input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .load-meta {
