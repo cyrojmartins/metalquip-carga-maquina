@@ -1,7 +1,7 @@
 /**
  * Agendamento heurístico das operações abertas por setor.
- * Capacidade diária do setor = (horas/dia por recurso) × qtde de recursos
- * (override manual de operadores, ou nº de postos com ops abertas).
+ * Capacidade diária do setor = horas disponíveis/dia (Parâmetros: operadores × horas/dia × (1−fadiga)),
+ * ou fallback (horas/dia por recurso) × qtde de recursos.
  */
 
 function startOfDay(d) {
@@ -386,13 +386,11 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
           </tr>`);
         }
       }
-      const hoursPerDay = schedule.hoursPerDay ?? 8;
       const totalSeg = setor.totalTempoSeg != null ? setor.totalTempoSeg : totalTempoSeg;
-      const cap = ` · capac. ${hoursPerDay.toFixed(1).replace(".", ",")} h/dia`;
       return `
         <section class="setor">
           <h2>${escapeHtml(setor.setor)}
-            <span class="meta">${setor.totalOps} ops · ${String(Math.round(totalSeg)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} s · ${setor.totalHoras.toFixed(1).replace(".", ",")} h${cap}</span>
+            <span class="meta">${setor.totalOps} ops · ${String(Math.round(totalSeg)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} s · ${setor.totalHoras.toFixed(1).replace(".", ",")} h</span>
           </h2>
           ${
             rows.length
@@ -453,7 +451,7 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
 </head>
 <body>
   <h1>${escapeHtml(titulo)}</h1>
-  <div class="sub">Gerado em ${escapeHtml(geradoEm)} · ${schedule.scheduled.length} operações · horizonte ${schedule.weeks} semana(s) · ${schedule.hoursPerDay} h/dia por recurso (capacidade acumulada por setor)</div>
+  <div class="sub">Gerado em ${escapeHtml(geradoEm)} · ${schedule.scheduled.length} operações · horizonte ${schedule.weeks} semana(s) · capacidade = horas disponíveis/dia por setor (Parâmetros)</div>
   ${setoresHtml || "<p class='empty'>Nenhuma operação agendada.</p>"}
 </body>
 </html>`;

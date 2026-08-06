@@ -2,6 +2,9 @@
  * UI — filtros, resumo hierárquico, carga, operações e cronograma.
  */
 
+/** Padrão interno de Horas/Dia ao criar parâmetros de um setor (editável em Parâmetros). */
+const DEFAULT_HORAS_DIA = 8;
+
 const state = {
   allRows: [],
   filtered: [],
@@ -316,10 +319,25 @@ function getOperadoresSetor(setor, defaultN = 1) {
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : Math.max(1, defaultN);
 }
 
+/** Horas disponíveis/dia do setor (Parâmetros: operadores × horas/dia × (1−fadiga)). */
+function getCapacidadeDiaSetor(setor, nRecursos = 1) {
+  const p = getParametrosSetor(setor);
+  const calc = calcParametrosSetor(p);
+  if (calc.horasDisponiveis != null) return calc.horasDisponiveis;
+  return DEFAULT_HORAS_DIA * Math.max(1, nRecursos);
+}
+
+function buildCapacidadeDiaPorSetor(setores) {
+  const map = {};
+  for (const nome of setores) {
+    map[nome] = getCapacidadeDiaSetor(nome);
+  }
+  return map;
+}
+
 function renderCarga() {
   const weeks = Number($("fWeeks").value) || 2;
-  const hoursPerDay = Number($("fHours").value) || 8;
-  const capacityPerRecurso = weeks * 5 * hoursPerDay;
+  const workDays = weeks * 5;
   const osSearch = ($("fCargaOs")?.value || "").trim().toLowerCase();
   const opsGetters = {
     osFull: (r) => r.osFull,
@@ -329,6 +347,8 @@ function renderCarga() {
     tempoUnit: (r) => r.tempoUnit,
     tempoTotal: (r) => r.tempoTotal,
   };
+
+  syncOperadoresFromParametros();
 
   const bySetor = new Map();
   for (const r of state.filtered) {
@@ -360,6 +380,7 @@ function renderCarga() {
     .map((item) => {
       const nPostos = item.postos.size || 1;
       const operadores = getOperadoresSetor(item.setor, nPostos);
+      const capacidadeDia = getCapacidadeDiaSetor(item.setor, operadores);
       let operacoes = sortItems(
         item.operacoes,
         state.sort.cargaOps.key,
@@ -376,7 +397,8 @@ function renderCarga() {
         ...item,
         nPostos,
         operadores,
-        capacity: capacityPerRecurso * operadores,
+        capacidadeDia,
+        capacity: workDays * capacidadeDia,
         operacoes,
       };
     });
@@ -395,7 +417,7 @@ function renderCarga() {
     for (const item of list) state.expandedCargaSetores.add(item.setor);
   }
 
-  $("cargaMeta").textContent = `Capacidade: ${fmtHours(capacityPerRecurso)} por recurso × qtde operadores (padrão = postos) · ${weeks} sem. × 5 dias × ${hoursPerDay} h`;
+  $("cargaMeta").textContent = `Capacidade do horizonte = horas disponíveis/dia (Parâmetros) × ${weeks} sem. × 5 dias`;
 
   if (!list.length) {
     $("cargaList").innerHTML = `<div class="empty">${
@@ -565,7 +587,6 @@ function renderOps() {
 
 function ensureSchedule() {
   const weeks = Number($("fWeeks").value) || 2;
-  const hoursPerDay = Number($("fHours").value) || 8;
   const postoFilter = $("fPosto").value || null;
   const tipo = $("fTipo").value;
   const setor = $("fSetor").value;
@@ -592,18 +613,16 @@ function ensureSchedule() {
 
   syncOperadoresFromParametros();
   const recursosPorSetor = { ...state.operadoresPorSetor };
-  const capacidadeDiaPorSetor = {};
-  for (const [nome, p] of Object.entries(state.parametrosSetor)) {
-    const calc = calcParametrosSetor(p);
-    if (calc.horasDisponiveis != null) {
-      capacidadeDiaPorSetor[nome] = calc.horasDisponiveis;
-    }
-  }
+  const setoresAbertos = [...new Set(openRows.map((r) => r.setor))];
+  for (const nome of setoresAbertos) getParametrosSetor(nome);
+  syncOperadoresFromParametros();
+  Object.assign(recursosPorSetor, state.operadoresPorSetor);
+  const capacidadeDiaPorSetor = buildCapacidadeDiaPorSetor(setoresAbertos);
 
   state.schedule = window.CargaSchedule.buildSchedule(state.allRows, {
     startDate: parseStartDate(),
     weeks,
-    hoursPerDay,
+    hoursPerDay: DEFAULT_HORAS_DIA,
     postoFilter: null, // já aplicado em openRows
     openRows,
     recursosPorSetor,
@@ -713,7 +732,6 @@ function listSetoresIdentificados() {
 function getParametrosSetor(nome) {
   if (!state.parametrosSetor[nome]) {
     const defaultOps = state.operadoresPorSetor[nome];
-    const defaultHoras = Number($("fHours").value) || 8;
     const nPostos =
       new Set(
         state.allRows
@@ -726,7 +744,7 @@ function getParametrosSetor(nome) {
         Number.isFinite(Number(defaultOps)) && Number(defaultOps) >= 1
           ? Math.floor(Number(defaultOps))
           : nPostos,
-      horasDia: defaultHoras,
+      horasDia: DEFAULT_HORAS_DIA,
     };
   }
   return state.parametrosSetor[nome];
@@ -850,13 +868,15 @@ function updateParametrosSetorFromInput(input, { rebuild = false } = {}) {
     state.operadoresPorSetor[setor] = Math.max(1, Math.floor(n) || 1);
   }
 
+  // Qualquer alteração de parâmetro invalida o cronograma cacheado
+  state.schedule = null;
+
   if (rebuild) {
     renderCronogramaScheduleOnly();
   }
 }
 
 function renderCronogramaScheduleOnly() {
-  const hoursPerDay = Number($("fHours").value) || 8;
   const sch = ensureSchedule();
   let bySetor = window.CargaSchedule.groupBySetor(sch);
 
@@ -875,7 +895,7 @@ function renderCronogramaScheduleOnly() {
   }
 
   $("btnExport").disabled = !sch.scheduled.length;
-  $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · ${fmtHours(hoursPerDay)}/recurso`;
+  $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · capac. = horas disponíveis/dia (Parâmetros)`;
 
   if (!bySetor.length) {
     $("cronGrid").innerHTML = `<div class="empty">Nada a agendar no filtro/horizonte atual.</div>`;
@@ -896,15 +916,12 @@ function renderCronogramaScheduleOnly() {
                 ),
               0
             );
-      const p = state.parametrosSetor[setor.setor];
-      const calc = p ? calcParametrosSetor(p) : null;
-      const capacH =
-        calc?.horasDisponiveis != null ? calc.horasDisponiveis : hoursPerDay;
+      const capacH = getCapacidadeDiaSetor(setor.setor);
       return `
         <section class="schedule-setor">
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
-            <span>${fmtNum(setor.totalOps)} ops · ${fmtNum(totalSeg, 0)} s · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(capacH)}/dia</span>
+            <span>${fmtNum(setor.totalOps)} ops · ${fmtNum(totalSeg, 0)} s · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(capacH)}/dia (disponível)</span>
           </div>
           ${renderSetorOpsTable(setor)}
         </section>`;
@@ -1002,7 +1019,6 @@ function filterSummaryForPrint() {
   if (search) parts.push(`Busca: ${search}`);
   if (state.activeTab === "carga" || state.activeTab === "cronograma") {
     parts.push(`Horizonte: ${$("fWeeks").value} sem.`);
-    parts.push(`Horas/dia: ${$("fHours").value}`);
   }
   if (state.activeTab === "cronograma" && $("fStart").value) {
     parts.push(`Início: ${$("fStart").value}`);
@@ -1212,7 +1228,7 @@ async function loadData() {
 }
 
 function bindEvents() {
-  ["fTipo", "fSetor", "fPosto", "fOperador", "fStatus", "fWeeks", "fHours", "fStart"].forEach((id) => {
+  ["fTipo", "fSetor", "fPosto", "fOperador", "fStatus", "fWeeks", "fStart"].forEach((id) => {
     $(id).addEventListener("change", () => {
       if (id === "fTipo" || id === "fSetor" || id === "fPosto") rebuildDependentFilters();
       refresh();
