@@ -824,8 +824,9 @@ table.resumo-mensal tr.resumo-total td {
 
 .schedule-days {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.65rem;
+  align-items: start;
 }
 
 .day-col {
@@ -834,6 +835,8 @@ table.resumo-mensal tr.resumo-total td {
   background: var(--surface);
   min-height: 80px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .day-col.has-ops {
@@ -846,18 +849,34 @@ table.resumo-mensal tr.resumo-total td {
 }
 
 .day-col .day-head {
-  padding: 0.4rem 0.5rem;
+  padding: 0.5rem 0.6rem;
   border-bottom: 1px solid var(--line);
-  font-size: 0.75rem;
-  font-weight: 700;
   display: flex;
-  justify-content: space-between;
-  gap: 0.35rem;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.day-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.day-load {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.day-col.over .day-load {
+  color: var(--danger);
 }
 
 .day-cap-bar {
   height: 4px;
   background: var(--bar-track);
+  flex-shrink: 0;
 }
 
 .day-cap-bar > span {
@@ -871,9 +890,11 @@ table.resumo-mensal tr.resumo-total td {
 }
 
 .day-col .day-ops {
-  padding: 0.35rem;
+  padding: 0.45rem;
   display: grid;
-  gap: 0.3rem;
+  gap: 0.4rem;
+  max-height: min(62vh, 640px);
+  overflow: auto;
 }
 
 .day-free,
@@ -886,9 +907,11 @@ table.resumo-mensal tr.resumo-total td {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 0.3rem 0.4rem;
+  padding: 0.45rem 0.5rem;
   font-size: 0.72rem;
-  line-height: 1.25;
+  line-height: 1.3;
+  display: grid;
+  gap: 0.22rem;
 }
 
 .op-chip.oversized {
@@ -896,9 +919,67 @@ table.resumo-mensal tr.resumo-total td {
   background: #fffbeb;
 }
 
+.op-chip-row {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr;
+  gap: 0.35rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.op-chip-label {
+  color: var(--muted);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  padding-top: 0.1rem;
+}
+
+.op-chip-value {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.op-chip-value.mono,
 .op-chip .os {
   font-family: var(--mono);
   font-weight: 600;
+  font-size: 0.74rem;
+}
+
+.op-chip-value.wrap {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.op-chip-value.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.op-chip-grid {
+  display: grid;
+  gap: 0.18rem;
+  margin-top: 0.1rem;
+  padding-top: 0.3rem;
+  border-top: 1px dashed var(--line);
+}
+
+.op-chip-total .op-chip-label,
+.op-chip-total .op-chip-value {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.op-chip-foot {
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-banner {

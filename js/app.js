@@ -662,29 +662,55 @@ function renderDayChips(days) {
   return days
     .map((d) => {
       const chips = d.ops
-        .slice(0, 12)
-        .map(
-          (op) => `
-        <div class="op-chip${op.oversized ? " oversized" : ""}" title="${escapeAttr(op.descricao)} · ${escapeAttr(op.posto)}${op.oversized ? " · excede capacidade do dia" : ""}">
-          <div class="os">${escapeHtml(op.osBase)}-${String(op.seq).padStart(2, "0")}</div>
-          <div>${escapeHtml(op.operacao)}</div>
-          <div class="muted">${fmtHours(op.tempoHoras)} · ${escapeHtml(op.posto)}</div>
-        </div>`
-        )
+        .map((op) => {
+          const os = op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`;
+          const tempoOper = op.tempoOper ?? 0;
+          const tempoTotal = op.tempoSeg ?? op.qtdLote * tempoOper;
+          return `
+        <div class="op-chip${op.oversized ? " oversized" : ""}" title="${escapeAttr(op.operacao)} · ${escapeAttr(op.posto)}${op.oversized ? " · excede capacidade do dia" : ""}">
+          <div class="op-chip-row">
+            <span class="op-chip-label">Nº OS</span>
+            <span class="op-chip-value mono">${escapeHtml(os)}</span>
+          </div>
+          <div class="op-chip-row">
+            <span class="op-chip-label">Código</span>
+            <span class="op-chip-value mono">${escapeHtml(op.codigo || "—")}</span>
+          </div>
+          <div class="op-chip-row">
+            <span class="op-chip-label">Descrição</span>
+            <span class="op-chip-value wrap">${escapeHtml(op.descricao || "—")}</span>
+          </div>
+          <div class="op-chip-grid">
+            <div class="op-chip-row">
+              <span class="op-chip-label">Qtd.Lote</span>
+              <span class="op-chip-value num">${fmtNum(op.qtdLote, 1)}</span>
+            </div>
+            <div class="op-chip-row">
+              <span class="op-chip-label">Tempo Oper</span>
+              <span class="op-chip-value num">${fmtNum(tempoOper, 0)} s</span>
+            </div>
+            <div class="op-chip-row op-chip-total">
+              <span class="op-chip-label">Tempo total</span>
+              <span class="op-chip-value num">${fmtNum(tempoTotal, 0)} s</span>
+            </div>
+          </div>
+          <div class="op-chip-foot muted">${fmtHours(op.tempoHoras)} · ${escapeHtml(op.posto || "—")}</div>
+        </div>`;
+        })
         .join("");
-      const more =
-        d.ops.length > 12
-          ? `<div class="muted day-more">+${d.ops.length - 12} ops</div>`
-          : "";
       const capH = d.capacityHoras != null ? d.capacityHoras : null;
       const pctRaw = d.pct != null ? d.pct : capH > 0 ? (100 * d.horas) / capH : 0;
       const pctBar = Math.min(100, pctRaw);
       const over = pctRaw > 100;
+      const dayTitle = d.label || (d.data ? window.CargaSchedule.weekdayLabel(d.data) : "");
       return `
         <div class="day-col${over ? " over" : d.ops.length ? " has-ops" : ""}">
-          <div class="day-head"><span>${escapeHtml(d.label)}</span><span>${fmtHours(d.horas)}${capH != null ? ` / ${fmtHours(capH)}` : ""}</span></div>
+          <div class="day-head">
+            <span class="day-title">${escapeHtml(dayTitle)}</span>
+            <span class="day-load">${fmtHours(d.horas)}${capH != null ? ` / ${fmtHours(capH)}` : ""}</span>
+          </div>
           <div class="day-cap-bar" title="${fmtNum(pctRaw, 0)}% da capacidade"><span style="width:${pctBar}%"></span></div>
-          <div class="day-ops">${chips || `<div class="muted day-free">livre</div>`}${more}</div>
+          <div class="day-ops">${chips || `<div class="muted day-free">livre</div>`}</div>
         </div>`;
     })
     .join("");

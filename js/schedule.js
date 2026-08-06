@@ -40,7 +40,11 @@ function formatDate(d) {
 }
 
 function weekdayLabel(d) {
-  return d.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" });
+  const weekday = d.toLocaleDateString("pt-BR", { weekday: "long" });
+  const name = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${name}, ${dd}/${mm}`;
 }
 
 /**
@@ -344,13 +348,14 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
           rows.push(`<tr>
             <td>${escapeHtml(day.label)}</td>
             <td>${escapeHtml(op.dataAgendaRaw)}</td>
-            <td>${escapeHtml(op.osBase)}-${String(op.seq).padStart(2, "0")}</td>
-            <td>${escapeHtml(op.posto)}</td>
+            <td>${escapeHtml(op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`)}</td>
             <td>${escapeHtml(op.codigo)}</td>
             <td>${escapeHtml(op.descricao)}</td>
-            <td>${escapeHtml(op.operacao)}</td>
+            <td class="num">${String(op.qtdLote ?? 0).replace(".", ",")}</td>
+            <td class="num">${String(op.tempoOper ?? 0).replace(".", ",")}</td>
+            <td class="num">${String(op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0)).replace(".", ",")}</td>
+            <td>${escapeHtml(op.posto)}</td>
             <td class="num">${op.tempoHoras.toFixed(1).replace(".", ",")} h</td>
-            <td>${escapeHtml(op.tipo)}</td>
           </tr>`);
         }
       }
@@ -368,8 +373,16 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
               ? `<table>
               <thead>
                 <tr>
-                  <th>Dia</th><th>Data</th><th>OS</th><th>Posto</th><th>Código</th>
-                  <th>Descrição</th><th>Operação</th><th>Tempo</th><th>Tipo</th>
+                  <th>Dia</th>
+                  <th>Data</th>
+                  <th>Nº Ord.Serviço</th>
+                  <th>Código Item</th>
+                  <th>Descrição do Item</th>
+                  <th>Qtd.Lote</th>
+                  <th>Tempo Oper (s)</th>
+                  <th>Tempo total (s)</th>
+                  <th>Posto</th>
+                  <th>Horas</th>
                 </tr>
               </thead>
               <tbody>${rows.join("")}</tbody>
