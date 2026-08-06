@@ -658,184 +658,56 @@ function ensureSchedule() {
   return state.schedule;
 }
 
-function renderDayChips(days) {
-  return days
-    .map((d) => {
-      const chips = d.ops
-        .map((op) => {
-          const os = op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`;
-          const tempoOper = op.tempoOper ?? 0;
-          const tempoTotal = op.tempoSeg ?? op.qtdLote * tempoOper;
-          return `
-        <div class="op-chip${op.oversized ? " oversized" : ""}" title="${escapeAttr(op.operacao)} · ${escapeAttr(op.posto)}${op.oversized ? " · excede capacidade do dia" : ""}">
-          <div class="op-chip-row">
-            <span class="op-chip-label">Nº OS</span>
-            <span class="op-chip-value mono">${escapeHtml(os)}</span>
-          </div>
-          <div class="op-chip-row">
-            <span class="op-chip-label">Código</span>
-            <span class="op-chip-value mono">${escapeHtml(op.codigo || "—")}</span>
-          </div>
-          <div class="op-chip-row">
-            <span class="op-chip-label">Descrição</span>
-            <span class="op-chip-value wrap">${escapeHtml(op.descricao || "—")}</span>
-          </div>
-          <div class="op-chip-grid">
-            <div class="op-chip-row">
-              <span class="op-chip-label">Qtd.Lote</span>
-              <span class="op-chip-value num">${fmtNum(op.qtdLote, 1)}</span>
-            </div>
-            <div class="op-chip-row">
-              <span class="op-chip-label">Tempo Oper</span>
-              <span class="op-chip-value num">${fmtNum(tempoOper, 0)} s</span>
-            </div>
-            <div class="op-chip-row op-chip-total">
-              <span class="op-chip-label">Tempo total</span>
-              <span class="op-chip-value num">${fmtNum(tempoTotal, 0)} s</span>
-            </div>
-          </div>
-          <div class="op-chip-foot muted">${fmtHours(op.tempoHoras)} · ${escapeHtml(op.posto || "—")}</div>
-        </div>`;
-        })
-        .join("");
-      const capH = d.capacityHoras != null ? d.capacityHoras : null;
-      const pctRaw = d.pct != null ? d.pct : capH > 0 ? (100 * d.horas) / capH : 0;
-      const pctBar = Math.min(100, pctRaw);
-      const over = pctRaw > 100;
-      const dayTitle = d.label || (d.data ? window.CargaSchedule.weekdayLabel(d.data) : "");
-      return `
-        <div class="day-col${over ? " over" : d.ops.length ? " has-ops" : ""}">
-          <div class="day-head">
-            <span class="day-title">${escapeHtml(dayTitle)}</span>
-            <span class="day-load">${fmtHours(d.horas)}${capH != null ? ` / ${fmtHours(capH)}` : ""}</span>
-          </div>
-          <div class="day-cap-bar" title="${fmtNum(pctRaw, 0)}% da capacidade"><span style="width:${pctBar}%"></span></div>
-          <div class="day-ops">${chips || `<div class="muted day-free">livre</div>`}</div>
-        </div>`;
-    })
-    .join("");
-}
-
-const MES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
-
-/** Resumo mensal de OS abertas do setor (emissão → qtde e tempo em segundos). */
-function buildResumoMensalSetor(setorNome) {
-  const tipo = $("fTipo").value;
-  const posto = $("fPosto").value;
-  const operador = $("fOperador").value;
-  const search = ($("fSearch").value || "").trim().toLowerCase();
-  // Alinha com ensureSchedule: ignora filtro de status, sempre ops abertas
-  const rows = state.allRows.filter((r) => {
-    if (r.status !== "aberto") return false;
-    if (r.setor !== setorNome) return false;
-    if (tipo && r.tipo !== tipo) return false;
-    if (posto && r.posto !== posto) return false;
-    if (operador) {
-      const op = r.operador || "(sem operador)";
-      if (op !== operador) return false;
+function renderSetorOpsTable(setor) {
+  const rows = [];
+  for (const day of setor.days) {
+    for (const op of day.ops) {
+      const os = op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`;
+      const tempoOper = op.tempoOper ?? 0;
+      const tempoTotal = op.tempoSeg ?? (op.qtdLote || 0) * tempoOper;
+      const dayLabel =
+        day.label || (day.data ? window.CargaSchedule.weekdayLabel(day.data) : "");
+      const dataRaw =
+        op.dataAgendaRaw ||
+        (day.data ? window.CargaSchedule.formatDate(day.data) : "");
+      rows.push(`
+        <tr${op.oversized ? ' class="oversized"' : ""}>
+          <td>${escapeHtml(dayLabel)}</td>
+          <td class="center">${escapeHtml(dataRaw)}</td>
+          <td class="mono">${escapeHtml(os)}</td>
+          <td class="codigo-item">${escapeHtml(op.codigo || "—")}</td>
+          <td class="desc">${escapeHtml(op.descricao || "—")}</td>
+          <td class="num">${fmtNum(op.qtdLote, 0)}</td>
+          <td class="num">${fmtNum(tempoOper, 0)}</td>
+          <td class="num">${fmtNum(tempoTotal, 0)}</td>
+          <td>${escapeHtml(op.posto || "—")}</td>
+          <td class="num">${fmtHours(op.tempoHoras)}</td>
+        </tr>`);
     }
-    if (search) {
-      const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
-      if (!hay.includes(search)) return false;
-    }
-    return true;
-  });
-
-  const byMonth = new Map(); // key yyyy-mm
-  for (const r of rows) {
-    if (!r.emissao) continue;
-    const y = r.emissao.getFullYear();
-    const m = r.emissao.getMonth();
-    const key = `${y}-${String(m + 1).padStart(2, "0")}`;
-    if (!byMonth.has(key)) {
-      byMonth.set(key, {
-        key,
-        year: y,
-        month: m,
-        label: MES_ABREV[m],
-        osSet: new Set(),
-        tempoSeg: 0,
-      });
-    }
-    const x = byMonth.get(key);
-    x.osSet.add(r.osFull || r.osBase);
-    // T. Produção Seg. = Qtd.Lote × Tempo Oper
-    x.tempoSeg += r.tempoSeg;
   }
 
-  const months = sortItems(
-    [...byMonth.values()].map((m) => ({
-      key: m.key,
-      year: m.year,
-      month: m.month,
-      label: m.label,
-      qtdeOs: m.osSet.size,
-      tempoSeg: m.tempoSeg,
-    })),
-    state.sort.cronograma.key,
-    state.sort.cronograma.dir,
-    {
-      key: (m) => m.key,
-      label: (m) => m.label,
-      qtdeOs: (m) => m.qtdeOs,
-      tempoSeg: (m) => m.tempoSeg,
-      setor: () => setorNome,
-    }
-  );
-  const totalQtde = months.reduce((a, m) => a + m.qtdeOs, 0);
-  const totalSeg = months.reduce((a, m) => a + m.tempoSeg, 0);
-  return { setor: setorNome, months, totalQtde, totalSeg, semEmissao: rows.filter((r) => !r.emissao).length };
-}
-
-function renderResumoMensalSetor(setorNome) {
-  const resumo = buildResumoMensalSetor(setorNome);
-  if (!resumo.months.length) {
-    return `
-      <div class="setor-resumo">
-        <div class="setor-resumo-title">Resumo — ${escapeHtml(setorNome)}</div>
-        <div class="empty" style="padding:0.75rem">Sem OS abertas com emissão para resumir.</div>
-      </div>`;
+  if (!rows.length) {
+    return `<div class="empty schedule-empty">Sem operações neste setor.</div>`;
   }
-
-  const years = new Set(resumo.months.map((m) => m.year));
-  const showYear = years.size > 1;
-
-  const body = resumo.months
-    .map((m, idx) => {
-      const mesLabel = showYear ? `${m.label}/${String(m.year).slice(2)}` : m.label;
-      const setorCell =
-        idx === 0
-          ? `<td class="setor-col" rowspan="${resumo.months.length}">${escapeHtml(resumo.setor)}</td>`
-          : "";
-      return `
-      <tr>
-        ${setorCell}
-        <td>${escapeHtml(mesLabel)}</td>
-        <td class="num">${fmtNum(m.qtdeOs, 0)}</td>
-        <td class="num">${fmtNum(m.tempoSeg, 0)}</td>
-      </tr>`;
-    })
-    .join("");
 
   return `
-    <div class="setor-resumo">
-      <table class="resumo-mensal">
+    <div class="table-wrap schedule-table-wrap">
+      <table class="data schedule-ops">
         <thead>
           <tr>
-            ${sortableCell("Setor da Fábrica", "cronograma", "setor", "", "th")}
-            ${sortableCell("Meses", "cronograma", "key", "", "th")}
-            ${sortableCell("Qtde OS Aberta", "cronograma", "qtdeOs", "num", "th")}
-            ${sortableCell("T. Produção Seg.", "cronograma", "tempoSeg", "num", "th")}
+            <th>Dia</th>
+            <th class="center">Data</th>
+            <th>Nº Ord.Serviço</th>
+            <th>Código Item</th>
+            <th>Descrição do Item</th>
+            <th class="num">Qtd.Lote</th>
+            <th class="num">Tempo Oper (s)</th>
+            <th class="num">Tempo total (s)</th>
+            <th>Posto</th>
+            <th class="num">Horas</th>
           </tr>
         </thead>
-        <tbody>
-          ${body}
-          <tr class="resumo-total">
-            <td colspan="2"><strong>${escapeHtml(resumo.setor)} Total</strong></td>
-            <td class="num"><strong>${fmtNum(resumo.totalQtde, 0)}</strong></td>
-            <td class="num"><strong>${fmtNum(resumo.totalSeg, 0)}</strong></td>
-          </tr>
-        </tbody>
+        <tbody>${rows.join("")}</tbody>
       </table>
     </div>`;
 }
@@ -873,20 +745,13 @@ function renderCronograma() {
         setor.capacityHorasDia != null
           ? ` · capac. ${fmtHours(setor.capacityHorasDia)}/dia`
           : "";
-      const nPostos =
-        setor.nPostos != null ? ` · ${fmtNum(setor.nPostos)} postos` : "";
-      const nRec =
-        setor.nRecursos != null ? ` · ${fmtNum(setor.nRecursos)} recursos` : "";
       return `
         <section class="schedule-setor">
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
-            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)}${nPostos}${nRec}${cap}</span>
+            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)}${cap}</span>
           </div>
-          <div class="schedule-posto">
-            <div class="schedule-days">${renderDayChips(setor.days)}</div>
-          </div>
-          ${renderResumoMensalSetor(setor.setor)}
+          ${renderSetorOpsTable(setor)}
         </section>`;
     })
     .join("");
@@ -1027,7 +892,7 @@ function printTab(tabName) {
     .tree-row.header, table.data th { position: static !important; }
     .sortable { cursor: default !important; }
     .carga-sort-bar { break-inside: avoid; }
-    .load-block, .schedule-setor, .tree-ops-wrap, table.data, table.resumo-mensal { break-inside: avoid; }
+    .load-block, .schedule-setor, .tree-ops-wrap, table.data, table.schedule-ops { break-inside: avoid; }
     .ops-input, .load-toggle .toggle { display: none !important; }
     .load-toggle { pointer-events: none; border: none; background: transparent; padding: 0; color: inherit; }
     @media print {

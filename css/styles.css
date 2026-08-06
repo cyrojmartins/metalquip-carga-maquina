@@ -729,7 +729,7 @@ table.data tr:hover td {
   background: #f3f6f9;
 }
 
-/* Schedule grid */
+/* Schedule — tabela por setor (cronograma semanal) */
 .schedule-setor {
   border-bottom: 1px solid var(--line);
 }
@@ -740,246 +740,86 @@ table.data tr:hover td {
 
 .schedule-setor-head {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+  padding: 0.55rem 0.85rem;
   background: var(--accent);
   color: #fff;
 }
 
 .schedule-setor-head h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .schedule-setor-head span {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   opacity: 0.9;
-  white-space: nowrap;
 }
 
-.schedule-posto {
-  border-bottom: 1px solid var(--line);
-  padding: 1rem;
-}
-
-.schedule-posto h3 {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
-}
-
-.setor-resumo {
-  padding: 0.75rem 1rem 1.15rem;
-  background: #eef1f4;
+.schedule-table-wrap {
+  max-height: min(68vh, 760px);
   border-top: 1px solid var(--line);
 }
 
-.setor-resumo-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--accent);
-  margin-bottom: 0.5rem;
+.schedule-empty {
+  padding: 1rem;
 }
 
-table.resumo-mensal {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.82rem;
-  background: #e8ebef;
+table.schedule-ops {
+  font-size: 0.78rem;
 }
 
-table.resumo-mensal th,
-table.resumo-mensal td {
-  padding: 0.4rem 0.65rem;
-  border: 1px solid #c5ccd5;
-  text-align: left;
-}
-
-table.resumo-mensal th {
-  background: #d5dde6;
-  color: var(--muted);
-  font-size: 0.72rem;
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 700;
-}
-
-table.resumo-mensal td.num,
-table.resumo-mensal th.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-table.resumo-mensal td.setor-col {
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-table.resumo-mensal tr.resumo-total td {
-  background: #dfe5eb;
-  border-top: 2px solid #aeb6c0;
-}
-
-.schedule-days {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 0.65rem;
-  align-items: start;
-}
-
-.day-col {
+table.schedule-ops th,
+table.schedule-ops td {
+  padding: 0.32rem 0.5rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  min-height: 80px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  border-bottom-color: var(--line);
+  vertical-align: top;
 }
 
-.day-col.has-ops {
-  background: #f4f7fa;
-}
-
-.day-col.over {
-  border-color: #fda4af;
-  background: #fff8f8;
-}
-
-.day-col .day-head {
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.day-title {
-  font-size: 0.82rem;
+table.schedule-ops th {
+  background: #eef1f4;
+  color: #4a5560;
   font-weight: 700;
-  line-height: 1.25;
 }
 
-.day-load {
-  font-size: 0.72rem;
+table.schedule-ops th.center,
+table.schedule-ops td.center {
+  text-align: center;
+}
+
+table.schedule-ops td.desc {
+  white-space: normal;
+  min-width: 220px;
+  max-width: 420px;
+}
+
+table.schedule-ops td.codigo-item {
+  color: #1a5fb4;
   font-weight: 600;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
 }
 
-.day-col.over .day-load {
-  color: var(--danger);
-}
-
-.day-cap-bar {
-  height: 4px;
-  background: var(--bar-track);
-  flex-shrink: 0;
-}
-
-.day-cap-bar > span {
-  display: block;
-  height: 100%;
-  background: var(--bar-fill);
-}
-
-.day-col.over .day-cap-bar > span {
-  background: var(--bar-over);
-}
-
-.day-col .day-ops {
-  padding: 0.45rem;
-  display: grid;
-  gap: 0.4rem;
-  max-height: min(62vh, 640px);
-  overflow: auto;
-}
-
-.day-free,
-.day-more {
-  padding: 0.3rem 0.35rem;
-  font-size: 0.72rem;
-}
-
-.op-chip {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 0.45rem 0.5rem;
-  font-size: 0.72rem;
-  line-height: 1.3;
-  display: grid;
-  gap: 0.22rem;
-}
-
-.op-chip.oversized {
-  border-color: #f59e0b;
-  background: #fffbeb;
-}
-
-.op-chip-row {
-  display: grid;
-  grid-template-columns: 4.6rem 1fr;
-  gap: 0.35rem;
-  align-items: start;
-  min-width: 0;
-}
-
-.op-chip-label {
-  color: var(--muted);
-  font-size: 0.64rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  font-weight: 700;
-  padding-top: 0.1rem;
-}
-
-.op-chip-value {
-  min-width: 0;
-  word-break: break-word;
-}
-
-.op-chip-value.mono,
-.op-chip .os {
+table.schedule-ops td.mono {
   font-family: var(--mono);
-  font-weight: 600;
-  font-size: 0.74rem;
+  font-size: 0.76rem;
 }
 
-.op-chip-value.wrap {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+table.schedule-ops tbody tr:nth-child(even) td {
+  background: #f7f8fa;
 }
 
-.op-chip-value.num {
-  font-variant-numeric: tabular-nums;
-  text-align: right;
+table.schedule-ops tbody tr:hover td {
+  background: #eef3f8;
 }
 
-.op-chip-grid {
-  display: grid;
-  gap: 0.18rem;
-  margin-top: 0.1rem;
-  padding-top: 0.3rem;
-  border-top: 1px dashed var(--line);
-}
-
-.op-chip-total .op-chip-label,
-.op-chip-total .op-chip-value {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.op-chip-foot {
-  margin-top: 0.15rem;
-  font-size: 0.68rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+table.schedule-ops tr.oversized td {
+  background: #fffbeb;
 }
 
 .status-banner {
@@ -1033,8 +873,5 @@ table.resumo-mensal tr.resumo-total td {
   .schedule-setor-head {
     flex-direction: column;
     align-items: flex-start;
-  }
-  .schedule-setor-head span {
-    white-space: normal;
   }
 }

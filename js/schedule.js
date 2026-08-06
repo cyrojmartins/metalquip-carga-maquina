@@ -347,9 +347,9 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
         for (const op of day.ops) {
           rows.push(`<tr>
             <td>${escapeHtml(day.label)}</td>
-            <td>${escapeHtml(op.dataAgendaRaw)}</td>
+            <td class="center">${escapeHtml(op.dataAgendaRaw)}</td>
             <td>${escapeHtml(op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`)}</td>
-            <td>${escapeHtml(op.codigo)}</td>
+            <td class="codigo">${escapeHtml(op.codigo)}</td>
             <td>${escapeHtml(op.descricao)}</td>
             <td class="num">${String(op.qtdLote ?? 0).replace(".", ",")}</td>
             <td class="num">${String(op.tempoOper ?? 0).replace(".", ",")}</td>
@@ -374,15 +374,15 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
               <thead>
                 <tr>
                   <th>Dia</th>
-                  <th>Data</th>
+                  <th class="center">Data</th>
                   <th>Nº Ord.Serviço</th>
                   <th>Código Item</th>
                   <th>Descrição do Item</th>
-                  <th>Qtd.Lote</th>
-                  <th>Tempo Oper (s)</th>
-                  <th>Tempo total (s)</th>
+                  <th class="num">Qtd.Lote</th>
+                  <th class="num">Tempo Oper (s)</th>
+                  <th class="num">Tempo total (s)</th>
                   <th>Posto</th>
-                  <th>Horas</th>
+                  <th class="num">Horas</th>
                 </tr>
               </thead>
               <tbody>${rows.join("")}</tbody>
@@ -402,12 +402,15 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
   body{font-family:Segoe UI,system-ui,sans-serif;color:#1a1d21;margin:24px;font-size:13px}
   h1{font-size:1.4rem;margin:0 0 .25rem;color:#2f4a63}
   .sub{color:#5c6570;margin-bottom:1.5rem}
-  h2{background:#2f4a63;color:#fff;padding:.55rem .75rem;margin:1.5rem 0 .75rem;font-size:1.05rem;border-radius:4px}
-  h2 .meta{font-weight:500;opacity:.85;font-size:.85rem;margin-left:.5rem}
-  table{width:100%;border-collapse:collapse;margin-bottom:1rem}
-  th,td{border:1px solid #c8ced6;padding:.35rem .45rem;text-align:left;vertical-align:top}
-  th{background:#eef0f3;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:#5c6570}
+  h2{background:#2f4a63;color:#fff;padding:.55rem .75rem;margin:1.5rem 0 0;font-size:1rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem .85rem}
+  h2 .meta{font-weight:500;opacity:.9;font-size:.8rem;text-transform:none;letter-spacing:0}
+  table{width:100%;border-collapse:collapse;margin:0 0 1rem;font-size:.78rem}
+  th,td{border:1px solid #c8ced6;padding:.32rem .5rem;text-align:left;vertical-align:top}
+  th{background:#eef1f4;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:#4a5560;font-weight:700}
+  tbody tr:nth-child(even) td{background:#f7f8fa}
   .num{text-align:right;white-space:nowrap}
+  .center{text-align:center}
+  .codigo{color:#1a5fb4;font-weight:600}
   .empty{color:#5c6570}
   @media print{body{margin:12px} h2{break-after:avoid} table{break-inside:avoid}}
 </style>
