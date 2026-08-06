@@ -450,25 +450,13 @@ function renderCarga() {
 
       return `
         <div class="load-block${over ? " is-over" : ""}">
-          <div class="load-item" data-setor="${escapeAttr(item.setor)}" data-horas="${item.horas}" data-ops="${item.ops}" data-cap-base="${capacityPerRecurso}">
+          <div class="load-item">
             <div class="load-info">
               <button type="button" class="load-toggle" data-expand-carga-setor="${escapeAttr(item.setor)}" aria-expanded="${open}">
                 <span class="toggle">${open ? "−" : "+"}</span>
                 <span class="load-name" title="${escapeAttr(item.setor)}">${escapeHtml(item.setor)}</span>
               </button>
-              <label class="ops-field">
-                <span>Qtde operadores</span>
-                <input
-                  type="number"
-                  class="ops-input"
-                  min="1"
-                  step="1"
-                  value="${item.operadores}"
-                  data-ops-setor="${escapeAttr(item.setor)}"
-                  aria-label="Quantidade de operadores — ${escapeAttr(item.setor)}"
-                />
-                <span class="ops-hint">${fmtNum(item.nPostos)} posto${item.nPostos === 1 ? "" : "s"}</span>
-              </label>
+              <span class="ops-hint">${fmtNum(item.nPostos)} posto${item.nPostos === 1 ? "" : "s"}</span>
             </div>
             <div class="bar-wrap">
               <div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>
@@ -480,45 +468,6 @@ function renderCarga() {
         </div>`;
     })
     .join("")}</div>`;
-}
-
-function updateCargaItemFromInput(input) {
-  const setor = input.getAttribute("data-ops-setor");
-  if (!setor) return;
-  let n = Number(input.value);
-  if (!Number.isFinite(n) || n < 1) n = 1;
-  n = Math.floor(n);
-  state.operadoresPorSetor[setor] = n;
-  if (String(input.value) !== String(n)) input.value = String(n);
-
-  const item = input.closest(".load-item");
-  if (!item) return;
-  const horas = Number(item.dataset.horas) || 0;
-  const ops = Number(item.dataset.ops) || 0;
-  const capBase = Number(item.dataset.capBase) || 0;
-  const capacity = capBase * n;
-  const pctRaw = capacity > 0 ? (100 * horas) / capacity : 0;
-  const pct = Math.min(100, pctRaw);
-  const over = horas > capacity;
-
-  const bar = item.querySelector(".bar");
-  const span = bar?.querySelector("span");
-  if (bar) bar.classList.toggle("over", over);
-  if (span) span.style.width = `${pct}%`;
-
-  const pctEl = item.querySelector(".load-pct");
-  if (pctEl) {
-    pctEl.textContent = `${fmtNum(pctRaw, 0)}%`;
-    pctEl.classList.toggle("over", over);
-  }
-
-  const block = item.closest(".load-block");
-  if (block) block.classList.toggle("is-over", over);
-
-  const meta = item.querySelector(".load-meta");
-  if (meta) {
-    meta.textContent = `${fmtHours(horas)} / ${fmtHours(capacity)} · ${fmtNum(ops)} ops${over ? " · sobrecarga" : ""}`;
-  }
 }
 
 function renderOps() {
@@ -860,15 +809,15 @@ function renderParametrosSetores() {
                 value="${p.operadores}" aria-label="Qtde operadores — ${escapeAttr(nome)}" />
             </td>
             <td class="num">
-              <input type="number" class="param-input" min="0" max="24" step="0.5"
+              <input type="number" class="param-input" min="0" max="24" step="0.01"
                 data-param="horasDia" data-setor="${escapeAttr(nome)}"
-                value="${p.horasDia}" aria-label="Horas/dia — ${escapeAttr(nome)}" />
+                value="${Number(p.horasDia).toFixed(2)}" aria-label="Horas/dia — ${escapeAttr(nome)}" />
             </td>
             <td class="num param-calc" data-calc="horasTrabalho">${
-              calc.horasTrabalho != null ? fmtNum(calc.horasTrabalho, 1) : "—"
+              calc.horasTrabalho != null ? fmtNum(calc.horasTrabalho, 2) : "—"
             }</td>
             <td class="num param-calc" data-calc="horasDisponiveis">${
-              calc.horasDisponiveis != null ? fmtNum(calc.horasDisponiveis, 1) : "—"
+              calc.horasDisponiveis != null ? fmtNum(calc.horasDisponiveis, 2) : "—"
             }</td>
           </tr>`;
           })
@@ -898,8 +847,8 @@ function updateParametrosSetorFromInput(input, { rebuild = false } = {}) {
   if (row) {
     const trab = row.querySelector('[data-calc="horasTrabalho"]');
     const disp = row.querySelector('[data-calc="horasDisponiveis"]');
-    if (trab) trab.textContent = calc.horasTrabalho != null ? fmtNum(calc.horasTrabalho, 1) : "—";
-    if (disp) disp.textContent = calc.horasDisponiveis != null ? fmtNum(calc.horasDisponiveis, 1) : "—";
+    if (trab) trab.textContent = calc.horasTrabalho != null ? fmtNum(calc.horasTrabalho, 2) : "—";
+    if (disp) disp.textContent = calc.horasDisponiveis != null ? fmtNum(calc.horasDisponiveis, 2) : "—";
   }
 
   if (param === "operadores") {
@@ -1115,7 +1064,7 @@ function printTab(tabName) {
     .sortable { cursor: default !important; }
     .carga-sort-bar { break-inside: avoid; }
     .load-block, .schedule-setor, .tree-ops-wrap, table.data, table.schedule-ops { break-inside: avoid; }
-    .ops-input, .load-toggle .toggle { display: none !important; }
+    .load-toggle .toggle { display: none !important; }
     .load-toggle { pointer-events: none; border: none; background: transparent; padding: 0; color: inherit; }
     @media print {
       body { padding: 0; }
@@ -1307,17 +1256,8 @@ function bindEvents() {
     }
   });
 
-  $("cargaList").addEventListener("input", (e) => {
-    const input = e.target.closest("[data-ops-setor]");
-    if (input) updateCargaItemFromInput(input);
-  });
-  $("cargaList").addEventListener("change", (e) => {
-    const input = e.target.closest("[data-ops-setor]");
-    if (input) updateCargaItemFromInput(input);
-  });
   $("cargaList").addEventListener("click", (e) => {
     if (handleSortClick(e)) return;
-    if (e.target.closest("[data-ops-setor]")) return;
     const btn = e.target.closest("[data-expand-carga-setor]");
     if (!btn) return;
     const key = btn.getAttribute("data-expand-carga-setor");

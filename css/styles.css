@@ -606,40 +606,11 @@ table.resumo-mensal th.sortable.sorted {
   white-space: nowrap;
 }
 
-.ops-field {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.72rem;
-  color: var(--muted);
-  flex-wrap: wrap;
-}
-
-.ops-field span {
-  white-space: nowrap;
-}
-
 .ops-hint {
   color: var(--muted);
   opacity: 0.85;
-  font-size: 0.68rem;
-}
-
-.ops-input {
-  width: 3.4rem;
-  padding: 0.2rem 0.35rem;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-  color: var(--ink);
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.ops-input:focus {
-  outline: 2px solid var(--accent-soft);
-  border-color: var(--accent);
+  font-size: 0.72rem;
+  white-space: nowrap;
 }
 
 .load-meta {
