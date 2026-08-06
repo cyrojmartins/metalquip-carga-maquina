@@ -670,10 +670,17 @@ function renderSetorOpsTable(setor) {
       const dataRaw =
         op.dataAgendaRaw ||
         (day.data ? window.CargaSchedule.formatDate(day.data) : "");
+      const tipoLabel =
+        op.tipo === "acabado"
+          ? "Acabado"
+          : op.tipo === "componente"
+            ? "Componente"
+            : op.tipo || "—";
       rows.push(`
         <tr${op.oversized ? ' class="oversized"' : ""}>
           <td>${escapeHtml(dayLabel)}</td>
           <td class="center">${escapeHtml(dataRaw)}</td>
+          <td>${escapeHtml(tipoLabel)}</td>
           <td class="mono">${escapeHtml(os)}</td>
           <td class="codigo-item">${escapeHtml(op.codigo || "—")}</td>
           <td class="desc">${escapeHtml(op.descricao || "—")}</td>
@@ -697,6 +704,7 @@ function renderSetorOpsTable(setor) {
           <tr>
             <th>Dia</th>
             <th class="center">Data</th>
+            <th>Tipo</th>
             <th>Nº Ord.Serviço</th>
             <th>Código Item</th>
             <th>Descrição do Item</th>
@@ -741,15 +749,11 @@ function renderCronograma() {
 
   $("cronGrid").innerHTML = bySetor
     .map((setor) => {
-      const cap =
-        setor.capacityHorasDia != null
-          ? ` · capac. ${fmtHours(setor.capacityHorasDia)}/dia`
-          : "";
       return `
         <section class="schedule-setor">
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
-            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)}${cap}</span>
+            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(hoursPerDay)}/dia</span>
           </div>
           ${renderSetorOpsTable(setor)}
         </section>`;

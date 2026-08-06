@@ -345,9 +345,16 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
       const rows = [];
       for (const day of setor.days) {
         for (const op of day.ops) {
+          const tipoLabel =
+            op.tipo === "acabado"
+              ? "Acabado"
+              : op.tipo === "componente"
+                ? "Componente"
+                : op.tipo || "";
           rows.push(`<tr>
             <td>${escapeHtml(day.label)}</td>
             <td class="center">${escapeHtml(op.dataAgendaRaw)}</td>
+            <td>${escapeHtml(tipoLabel)}</td>
             <td>${escapeHtml(op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`)}</td>
             <td class="codigo">${escapeHtml(op.codigo)}</td>
             <td>${escapeHtml(op.descricao)}</td>
@@ -359,10 +366,8 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
           </tr>`);
         }
       }
-      const cap =
-        setor.capacityHorasDia != null
-          ? ` · capac. ${setor.capacityHorasDia.toFixed(1).replace(".", ",")} h/dia`
-          : "";
+      const hoursPerDay = schedule.hoursPerDay ?? 8;
+      const cap = ` · capac. ${hoursPerDay.toFixed(1).replace(".", ",")} h/dia`;
       return `
         <section class="setor">
           <h2>${escapeHtml(setor.setor)}
@@ -375,6 +380,7 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
                 <tr>
                   <th>Dia</th>
                   <th class="center">Data</th>
+                  <th>Tipo</th>
                   <th>Nº Ord.Serviço</th>
                   <th>Código Item</th>
                   <th>Descrição do Item</th>
