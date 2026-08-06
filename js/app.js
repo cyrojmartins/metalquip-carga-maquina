@@ -10,6 +10,7 @@ const state = {
   expandedPostos: new Set(),
   expandedOperadores: new Set(),
   operadoresPorSetor: {},
+  parametrosSetor: {},
   expandedCargaSetores: new Set(),
   activeTab: "resumo",
   sort: {
@@ -645,7 +646,15 @@ function ensureSchedule() {
     return true;
   });
 
+  syncOperadoresFromParametros();
   const recursosPorSetor = { ...state.operadoresPorSetor };
+  const capacidadeDiaPorSetor = {};
+  for (const [nome, p] of Object.entries(state.parametrosSetor)) {
+    const calc = calcParametrosSetor(p);
+    if (calc.horasDisponiveis != null) {
+      capacidadeDiaPorSetor[nome] = calc.horasDisponiveis;
+    }
+  }
 
   state.schedule = window.CargaSchedule.buildSchedule(state.allRows, {
     startDate: parseStartDate(),
@@ -654,6 +663,7 @@ function ensureSchedule() {
     postoFilter: null, // já aplicado em openRows
     openRows,
     recursosPorSetor,
+    capacidadeDiaPorSetor,
   });
   return state.schedule;
 }
@@ -730,7 +740,178 @@ function renderSetorOpsTable(setor) {
     </div>`;
 }
 
-function renderCronograma() {
+/** Lista setores identificados (ops abertas no filtro atual do cronograma). */
+function listSetoresIdentificados() {
+  const tipo = $("fTipo").value;
+  const setor = $("fSetor").value;
+  const posto = $("fPosto").value;
+  const operador = $("fOperador").value;
+  const search = ($("fSearch").value || "").trim().toLowerCase();
+  const set = new Set();
+  for (const r of state.allRows) {
+    if (r.status !== "aberto") continue;
+    if (tipo && r.tipo !== tipo) continue;
+    if (setor && r.setor !== setor) continue;
+    if (posto && r.posto !== posto) continue;
+    if (operador) {
+      const op = r.operador || "(sem operador)";
+      if (op !== operador) continue;
+    }
+    if (search) {
+      const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
+      if (!hay.includes(search)) continue;
+    }
+    set.add(r.setor);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function getParametrosSetor(nome) {
+  if (!state.parametrosSetor[nome]) {
+    const defaultOps = state.operadoresPorSetor[nome];
+    const defaultHoras = Number($("fHours").value) || 8;
+    const nPostos =
+      new Set(
+        state.allRows
+          .filter((r) => r.status === "aberto" && r.setor === nome)
+          .map((r) => r.posto)
+      ).size || 1;
+    state.parametrosSetor[nome] = {
+      fadiga: 0,
+      operadores:
+        Number.isFinite(Number(defaultOps)) && Number(defaultOps) >= 1
+          ? Math.floor(Number(defaultOps))
+          : nPostos,
+      horasDia: defaultHoras,
+    };
+  }
+  return state.parametrosSetor[nome];
+}
+
+/** Horas trabalho = operadores × horas/dia; disponíveis = trabalho × (1 − fadiga%). */
+function calcParametrosSetor(p) {
+  const operadores = Number(p.operadores);
+  const horasDia = Number(p.horasDia);
+  const fadiga = Number(p.fadiga);
+  const opsOk = Number.isFinite(operadores) && operadores >= 0;
+  const horasOk = Number.isFinite(horasDia) && horasDia >= 0;
+  const fadigaOk = Number.isFinite(fadiga) && fadiga >= 0;
+  const horasTrabalho = opsOk && horasOk ? operadores * horasDia : null;
+  const fadigaPct = fadigaOk ? Math.min(100, Math.max(0, fadiga)) : 0;
+  const horasDisponiveis =
+    horasTrabalho != null ? horasTrabalho * (1 - fadigaPct / 100) : null;
+  return { horasTrabalho, horasDisponiveis, fadigaPct };
+}
+
+function syncOperadoresFromParametros() {
+  for (const [nome, p] of Object.entries(state.parametrosSetor)) {
+    const n = Number(p.operadores);
+    if (Number.isFinite(n) && n >= 1) {
+      state.operadoresPorSetor[nome] = Math.floor(n);
+    }
+  }
+}
+
+function renderParametrosSetores() {
+  const el = $("cronSetoresTable");
+  const meta = $("cronSetoresMeta");
+  if (!el) return;
+
+  const setores = listSetoresIdentificados();
+  if (meta) {
+    meta.textContent = setores.length
+      ? `${fmtNum(setores.length)} setor${setores.length === 1 ? "" : "es"}`
+      : "";
+  }
+
+  if (!setores.length) {
+    el.innerHTML = `<div class="empty">Nenhum setor com operações abertas no filtro atual.</div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="data setor-params">
+      <thead>
+        <tr>
+          <th>Descrição dos Setores</th>
+          <th class="num">% Fadiga</th>
+          <th class="num">Qtde Operadores</th>
+          <th class="num">Horas/Dia</th>
+          <th class="num">Horas trabalho dia</th>
+          <th class="num">Horas disponíveis dia</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${setores
+          .map((nome) => {
+            const p = getParametrosSetor(nome);
+            const calc = calcParametrosSetor(p);
+            return `
+          <tr data-param-setor="${escapeAttr(nome)}">
+            <td class="setor-nome" title="${escapeAttr(nome)}">${escapeHtml(nome)}</td>
+            <td class="num">
+              <input type="number" class="param-input" min="0" max="100" step="0.5"
+                data-param="fadiga" data-setor="${escapeAttr(nome)}"
+                value="${p.fadiga}" aria-label="% Fadiga — ${escapeAttr(nome)}" />
+            </td>
+            <td class="num">
+              <input type="number" class="param-input" min="0" step="1"
+                data-param="operadores" data-setor="${escapeAttr(nome)}"
+                value="${p.operadores}" aria-label="Qtde operadores — ${escapeAttr(nome)}" />
+            </td>
+            <td class="num">
+              <input type="number" class="param-input" min="0" max="24" step="0.5"
+                data-param="horasDia" data-setor="${escapeAttr(nome)}"
+                value="${p.horasDia}" aria-label="Horas/dia — ${escapeAttr(nome)}" />
+            </td>
+            <td class="num param-calc" data-calc="horasTrabalho">${
+              calc.horasTrabalho != null ? fmtNum(calc.horasTrabalho, 1) : "—"
+            }</td>
+            <td class="num param-calc" data-calc="horasDisponiveis">${
+              calc.horasDisponiveis != null ? fmtNum(calc.horasDisponiveis, 1) : "—"
+            }</td>
+          </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>`;
+}
+
+function updateParametrosSetorFromInput(input, { rebuild = false } = {}) {
+  const setor = input.getAttribute("data-setor");
+  const param = input.getAttribute("data-param");
+  if (!setor || !param) return;
+
+  let n = Number(input.value);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  if (param === "fadiga") n = Math.min(100, n);
+  if (param === "operadores") n = Math.floor(n);
+
+  const p = getParametrosSetor(setor);
+  p[param] = n;
+  if (param === "operadores" && String(input.value) !== String(n)) {
+    input.value = String(n);
+  }
+
+  const calc = calcParametrosSetor(p);
+  const row = input.closest("tr");
+  if (row) {
+    const trab = row.querySelector('[data-calc="horasTrabalho"]');
+    const disp = row.querySelector('[data-calc="horasDisponiveis"]');
+    if (trab) trab.textContent = calc.horasTrabalho != null ? fmtNum(calc.horasTrabalho, 1) : "—";
+    if (disp) disp.textContent = calc.horasDisponiveis != null ? fmtNum(calc.horasDisponiveis, 1) : "—";
+  }
+
+  if (param === "operadores") {
+    state.operadoresPorSetor[setor] = Math.max(1, Math.floor(n) || 1);
+  }
+
+  if (rebuild) {
+    renderCronogramaScheduleOnly();
+  }
+}
+
+function renderCronogramaScheduleOnly() {
   const hoursPerDay = Number($("fHours").value) || 8;
   const sch = ensureSchedule();
   let bySetor = window.CargaSchedule.groupBySetor(sch);
@@ -757,7 +938,7 @@ function renderCronograma() {
     return;
   }
 
-  $("cronGrid").innerHTML = bySetor
+  let html = bySetor
     .map((setor) => {
       const totalSeg =
         setor.totalTempoSeg != null
@@ -771,11 +952,15 @@ function renderCronograma() {
                 ),
               0
             );
+      const p = state.parametrosSetor[setor.setor];
+      const calc = p ? calcParametrosSetor(p) : null;
+      const capacH =
+        calc?.horasDisponiveis != null ? calc.horasDisponiveis : hoursPerDay;
       return `
         <section class="schedule-setor">
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
-            <span>${fmtNum(setor.totalOps)} ops · ${fmtNum(totalSeg, 0)} s · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(hoursPerDay)}/dia</span>
+            <span>${fmtNum(setor.totalOps)} ops · ${fmtNum(totalSeg, 0)} s · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(capacH)}/dia</span>
           </div>
           ${renderSetorOpsTable(setor)}
         </section>`;
@@ -787,12 +972,19 @@ function renderCronograma() {
       .slice(0, 8)
       .map((b) => `${b.osFull} (${b.motivo})`)
       .join(" · ");
-    $("cronGrid").innerHTML += `
+    html += `
       <div class="padded" style="padding:1rem;border-top:1px solid var(--line)">
         <strong>${fmtNum(sch.blocked.length)} operações não agendadas</strong>
         <div class="muted" style="margin-top:0.35rem;font-size:0.82rem">${escapeHtml(sample)}${sch.blocked.length > 8 ? "…" : ""}</div>
       </div>`;
   }
+
+  $("cronGrid").innerHTML = html;
+}
+
+function renderCronograma() {
+  renderParametrosSetores();
+  renderCronogramaScheduleOnly();
 }
 
 function montarCronogramaPorSetor() {
@@ -841,7 +1033,7 @@ const PRINT_TABS = {
   },
   cronograma: {
     title: "Cronograma semanal",
-    bodyId: "cronGrid",
+    bodyId: "cronLayout",
     metaId: "cronMeta",
   },
 };
@@ -1139,6 +1331,18 @@ function bindEvents() {
   $("cronGrid").addEventListener("click", (e) => {
     handleSortClick(e);
   });
+
+  const setoresEl = $("cronSetoresTable");
+  if (setoresEl) {
+    setoresEl.addEventListener("input", (e) => {
+      const input = e.target.closest(".param-input");
+      if (input) updateParametrosSetorFromInput(input, { rebuild: false });
+    });
+    setoresEl.addEventListener("change", (e) => {
+      const input = e.target.closest(".param-input");
+      if (input) updateParametrosSetorFromInput(input, { rebuild: true });
+    });
+  }
 
   $("btnReload").addEventListener("click", () => loadData());
 

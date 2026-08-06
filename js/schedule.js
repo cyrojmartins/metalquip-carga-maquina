@@ -55,6 +55,7 @@ function weekdayLabel(d) {
  * @param {number} options.hoursPerDay - capacidade diária por posto/recurso
  * @param {string|null} options.postoFilter
  * @param {object} [options.recursosPorSetor] - override de qtde de recursos (operadores) por setor
+ * @param {object} [options.capacidadeDiaPorSetor] - horas disponíveis/dia por setor (após fadiga)
  * @param {Array} [options.openRows] - subset de ops abertas a agendar (filtros da UI)
  */
 function buildSchedule(allRows, options) {
@@ -64,6 +65,7 @@ function buildSchedule(allRows, options) {
     hoursPerDay = 8,
     postoFilter = null,
     recursosPorSetor = {},
+    capacidadeDiaPorSetor = {},
     openRows = null,
   } = options;
 
@@ -113,7 +115,11 @@ function buildSchedule(allRows, options) {
     const override = Number(recursosPorSetor[s]);
     const nRecursos =
       Number.isFinite(override) && override >= 1 ? Math.floor(override) : nPostos;
-    const dayCap = capacityPerRecursoMin * nRecursos;
+    const capOverride = Number(capacidadeDiaPorSetor[s]);
+    const dayCap =
+      Number.isFinite(capOverride) && capOverride >= 0
+        ? capOverride * 60
+        : capacityPerRecursoMin * nRecursos;
     recursosBySetor.set(s, nRecursos);
     capacityMinBySetor.set(s, dayCap);
     remaining.set(

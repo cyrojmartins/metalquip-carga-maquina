@@ -130,7 +130,16 @@
           </div>
           <button type="button" class="secondary btn-print" data-print-tab="cronograma">Imprimir</button>
         </div>
-        <div class="panel-body" id="cronGrid"></div>
+        <div class="cron-layout" id="cronLayout">
+          <aside class="cron-setores-panel">
+            <div class="cron-setores-head">
+              <h3>Parâmetros por setor</h3>
+              <span class="muted" id="cronSetoresMeta"></span>
+            </div>
+            <div class="cron-setores-body" id="cronSetoresTable"></div>
+          </aside>
+          <div class="cron-schedule-panel" id="cronGrid"></div>
+        </div>
       </section>
     </main>
 
