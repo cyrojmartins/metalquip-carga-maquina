@@ -234,10 +234,24 @@ main {
   background: var(--surface);
 }
 
+.panel-head-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.85rem;
+  min-width: 0;
+  flex: 1;
+}
+
 .panel-head h2 {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
+}
+
+.btn-print {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .panel-body {
@@ -295,6 +309,76 @@ main {
   font-weight: 700;
   position: sticky;
   top: 0;
+  z-index: 2;
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.sortable:hover {
+  color: var(--accent);
+}
+
+.sortable.sorted {
+  color: var(--accent);
+}
+
+.tree-row.header .sortable,
+.tree-ops-row.header .sortable {
+  padding: 0.15rem 0.1rem;
+  border-radius: 3px;
+}
+
+.tree-row.header .sortable:hover,
+.tree-ops-row.header .sortable:hover {
+  background: var(--accent-soft);
+}
+
+.carga-sort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: center;
+  margin: 0 0 0.75rem;
+  padding: 0.45rem 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.carga-sort-bar .sortable {
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+}
+
+.carga-sort-bar .sortable:hover,
+.carga-sort-bar .sortable.sorted {
+  background: var(--accent-soft);
+}
+
+table.data th.sortable,
+table.resumo-mensal th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+table.data th.sortable:hover,
+table.resumo-mensal th.sortable:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+table.data th.sortable.sorted,
+table.resumo-mensal th.sortable.sorted {
+  color: var(--accent);
 }
 
 .tree-row.setor {

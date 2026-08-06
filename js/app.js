@@ -12,6 +12,14 @@ const state = {
   operadoresPorSetor: {},
   expandedCargaSetores: new Set(),
   activeTab: "resumo",
+  sort: {
+    resumo: { key: "horasAbertas", dir: "desc" },
+    resumoOps: { key: "tempoTotal", dir: "desc" },
+    carga: { key: "horas", dir: "desc" },
+    cargaOps: { key: "tempoTotal", dir: "desc" },
+    ops: { key: "emissao", dir: "asc" },
+    cronograma: { key: "key", dir: "asc" },
+  },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -136,20 +144,55 @@ function renderKpis() {
 }
 
 function renderResumo() {
-  const hierarchy = window.CargaParse.buildHierarchy(state.filtered);
+  let hierarchy = window.CargaParse.buildHierarchy(state.filtered);
+  const resumoGetters = {
+    nome: (x) => x.nome,
+    total: (x) => x.total,
+    aberto: (x) => x.aberto,
+    fechada: (x) => x.fechada,
+    pctFechado: (x) => x.pctFechado,
+    horasAbertas: (x) => x.horasAbertas,
+  };
+  const { key: rKey, dir: rDir } = state.sort.resumo;
+  hierarchy = sortItems(hierarchy, rKey, rDir, resumoGetters).map((setor) => ({
+    ...setor,
+    postos: sortItems(setor.postos, rKey, rDir, resumoGetters).map((posto) => ({
+      ...posto,
+      operadores: sortItems(
+        posto.operadores.map((op) => ({
+          ...op,
+          pctFechado: op.total ? (100 * op.fechada) / op.total : 0,
+        })),
+        rKey,
+        rDir,
+        resumoGetters
+      ),
+    })),
+  }));
+
   $("resumoMeta").textContent = `${hierarchy.length} setores`;
 
   const header = `
     <div class="tree-row header">
-      <div>Nome</div>
-      <div class="num">Total</div>
-      <div class="num">Aberto</div>
-      <div class="num">Fechada</div>
-      <div class="num hide-sm">% Fech.</div>
-      <div class="num">Horas abertas</div>
+      ${sortableCell("Nome", "resumo", "nome")}
+      ${sortableCell("Total", "resumo", "total", "num")}
+      ${sortableCell("Aberto", "resumo", "aberto", "num")}
+      ${sortableCell("Fechada", "resumo", "fechada", "num")}
+      ${sortableCell("% Fech.", "resumo", "pctFechado", "num hide-sm")}
+      ${sortableCell("Horas abertas", "resumo", "horasAbertas", "num")}
     </div>`;
 
   const parts = [header];
+  const opsGetters = {
+    osFull: (r) => r.osFull,
+    codigo: (r) => r.codigo,
+    descricao: (r) => r.descricao,
+    qtdLote: (r) => r.qtdLote,
+    tempoUnit: (r) => r.tempoUnit,
+    tempoTotal: (r) => r.tempoTotal,
+    qtdeFinal: (r) => r.qtdeFinal,
+    tempoUnitApontado: (r) => r.tempoUnitApontado,
+  };
 
   for (const setor of hierarchy) {
     const sKey = setor.nome;
@@ -199,39 +242,45 @@ function renderResumo() {
             <div class="num">${fmtNum(op.total)}</div>
             <div class="num">${fmtNum(op.aberto)}</div>
             <div class="num">${fmtNum(op.fechada)}</div>
-            <div class="num hide-sm">${fmtNum(op.total ? (100 * op.fechada) / op.total : 0, 0)}%</div>
+            <div class="num hide-sm">${fmtNum(op.pctFechado, 0)}%</div>
             <div class="num">${fmtHours(op.horasAbertas)}</div>
           </div>`);
 
         if (!oOpen) continue;
 
         const showApontado = $("fStatus").value !== "aberto";
+        const sortedOps = sortItems(
+          op.operacoes,
+          state.sort.resumoOps.key,
+          state.sort.resumoOps.dir,
+          opsGetters
+        );
         const opsHeader = showApontado
           ? `
             <div class="tree-ops-row header with-apontado">
-              <div>Nº OS</div>
-              <div>Código</div>
-              <div>Descrição</div>
-              <div class="num">Qtde Lote</div>
-              <div class="num">Tempo unit.</div>
-              <div class="num">Tempo total</div>
-              <div class="num">Qtde Final</div>
-              <div class="num" title="((Terminou − Início) ÷ Qtde.Final) × 60 — segundos">Tempo/un. real (s)</div>
+              ${sortableCell("Nº OS", "resumoOps", "osFull")}
+              ${sortableCell("Código", "resumoOps", "codigo")}
+              ${sortableCell("Descrição", "resumoOps", "descricao")}
+              ${sortableCell("Qtde Lote", "resumoOps", "qtdLote", "num")}
+              ${sortableCell("Tempo unit.", "resumoOps", "tempoUnit", "num")}
+              ${sortableCell("Tempo total", "resumoOps", "tempoTotal", "num")}
+              ${sortableCell("Qtde Final", "resumoOps", "qtdeFinal", "num")}
+              ${sortableCell("Tempo/un. real (s)", "resumoOps", "tempoUnitApontado", "num", "div")}
             </div>`
           : `
             <div class="tree-ops-row header">
-              <div>Nº OS</div>
-              <div>Código</div>
-              <div>Descrição</div>
-              <div class="num">Qtde Lote</div>
-              <div class="num">Tempo unit.</div>
-              <div class="num">Tempo total</div>
+              ${sortableCell("Nº OS", "resumoOps", "osFull")}
+              ${sortableCell("Código", "resumoOps", "codigo")}
+              ${sortableCell("Descrição", "resumoOps", "descricao")}
+              ${sortableCell("Qtde Lote", "resumoOps", "qtdLote", "num")}
+              ${sortableCell("Tempo unit.", "resumoOps", "tempoUnit", "num")}
+              ${sortableCell("Tempo total", "resumoOps", "tempoTotal", "num")}
             </div>`;
 
         parts.push(`
           <div class="tree-ops-wrap">
             ${opsHeader}
-            ${op.operacoes
+            ${sortedOps
               .map((row) => {
                 const apontadoCols = showApontado
                   ? `
@@ -276,6 +325,14 @@ function renderCarga() {
   const hoursPerDay = Number($("fHours").value) || 8;
   const capacityPerOperador = weeks * 5 * hoursPerDay;
   const osSearch = ($("fCargaOs")?.value || "").trim().toLowerCase();
+  const opsGetters = {
+    osFull: (r) => r.osFull,
+    codigo: (r) => r.codigo,
+    descricao: (r) => r.descricao,
+    qtdLote: (r) => r.qtdLote,
+    tempoUnit: (r) => r.tempoUnit,
+    tempoTotal: (r) => r.tempoTotal,
+  };
 
   const bySetor = new Map();
   for (const r of state.filtered) {
@@ -306,10 +363,11 @@ function renderCarga() {
   let list = [...bySetor.values()]
     .map((item) => {
       const operadores = getOperadoresSetor(item.setor);
-      let operacoes = [...item.operacoes].sort(
-        (a, b) =>
-          b.tempoTotal - a.tempoTotal ||
-          String(a.osFull).localeCompare(String(b.osFull), "pt-BR")
+      let operacoes = sortItems(
+        item.operacoes,
+        state.sort.cargaOps.key,
+        state.sort.cargaOps.dir,
+        opsGetters
       );
       if (osSearch) {
         operacoes = operacoes.filter((op) => {
@@ -324,8 +382,16 @@ function renderCarga() {
         capacity: capacityPerOperador * operadores,
         operacoes,
       };
-    })
-    .sort((a, b) => b.horas - a.horas);
+    });
+
+  list = sortItems(list, state.sort.carga.key, state.sort.carga.dir, {
+    setor: (x) => x.setor,
+    horas: (x) => x.horas,
+    ops: (x) => x.ops,
+    capacity: (x) => x.capacity,
+    operadores: (x) => x.operadores,
+    nPostos: (x) => x.nPostos,
+  });
 
   if (osSearch) {
     list = list.filter((item) => item.operacoes.length > 0);
@@ -343,7 +409,15 @@ function renderCarga() {
     return;
   }
 
-  $("cargaList").innerHTML = `<div class="load-list">${list
+  $("cargaList").innerHTML = `
+    <div class="carga-sort-bar">
+      ${sortableCell("Setor", "carga", "setor")}
+      ${sortableCell("Horas", "carga", "horas", "num")}
+      ${sortableCell("Operações", "carga", "ops", "num")}
+      ${sortableCell("Capacidade", "carga", "capacity", "num")}
+      ${sortableCell("Operadores", "carga", "operadores", "num")}
+    </div>
+    <div class="load-list">${list
     .map((item) => {
       const pct = item.capacity > 0 ? Math.min(100, (100 * item.horas) / item.capacity) : 0;
       const over = item.horas > item.capacity;
@@ -352,12 +426,12 @@ function renderCarga() {
         ? `
         <div class="tree-ops-wrap carga-ops">
           <div class="tree-ops-row header">
-            <div>Nº OS</div>
-            <div>Código</div>
-            <div>Descrição</div>
-            <div class="num">Qtde Lote</div>
-            <div class="num">Tempo unit.</div>
-            <div class="num">Tempo total</div>
+            ${sortableCell("Nº OS", "cargaOps", "osFull")}
+            ${sortableCell("Código", "cargaOps", "codigo")}
+            ${sortableCell("Descrição", "cargaOps", "descricao")}
+            ${sortableCell("Qtde Lote", "cargaOps", "qtdLote", "num")}
+            ${sortableCell("Tempo unit.", "cargaOps", "tempoUnit", "num")}
+            ${sortableCell("Tempo total", "cargaOps", "tempoTotal", "num")}
           </div>
           ${item.operacoes
             .map(
@@ -435,8 +509,32 @@ function updateCargaItemFromInput(input) {
 }
 
 function renderOps() {
-  const rows = state.filtered.slice(0, 2000);
   const showApontado = $("fStatus").value !== "aberto";
+  const opsGetters = {
+    status: (r) => r.status,
+    tipo: (r) => r.tipo,
+    emissao: (r) => r.emissao || r.emissaoRaw,
+    osFull: (r) => r.osFull,
+    codigo: (r) => r.codigo,
+    descricao: (r) => r.descricao,
+    operacao: (r) => r.operacao,
+    tempoMin: (r) => r.tempoMin,
+    posto: (r) => r.posto,
+    setor: (r) => r.setor,
+    operador: (r) => r.operador || "",
+    diaOperacao: (r) => r.diaOperacao || r.diaOperacaoRaw || "",
+    iniciou: (r) => r.iniciou || "",
+    terminou: (r) => r.terminou || "",
+    qtdeFinal: (r) => r.qtdeFinal,
+    tempoUnitApontado: (r) => r.tempoUnitApontado,
+  };
+  const sorted = sortItems(
+    state.filtered,
+    state.sort.ops.key,
+    state.sort.ops.dir,
+    opsGetters
+  );
+  const rows = sorted.slice(0, 2000);
   $("opsMeta").textContent =
     state.filtered.length > 2000
       ? `Mostrando 2.000 de ${fmtNum(state.filtered.length)}`
@@ -478,16 +576,25 @@ function renderOps() {
     .join("");
 
   const apontadoHeaders = showApontado
-    ? `<th>Início</th><th>Término</th><th>Qtde Final</th><th title="((Terminou − Início) ÷ Qtde.Final) × 60 — segundos">Tempo/un. real (s)</th>`
+    ? `${sortableCell("Início", "ops", "iniciou", "", "th")}${sortableCell("Término", "ops", "terminou", "", "th")}${sortableCell("Qtde Final", "ops", "qtdeFinal", "num", "th")}${sortableCell("Tempo/un. real (s)", "ops", "tempoUnitApontado", "num", "th")}`
     : "";
 
   $("opsTable").innerHTML = `
     <table class="data">
       <thead>
         <tr>
-          <th>Status</th><th>Tipo</th><th>Emissão</th><th>OS</th><th>Código</th>
-          <th>Descrição</th><th>Operação</th><th>Tempo</th><th>Posto</th>
-          <th>Setor</th><th>Operador</th><th>Dia Operação</th>
+          ${sortableCell("Status", "ops", "status", "", "th")}
+          ${sortableCell("Tipo", "ops", "tipo", "", "th")}
+          ${sortableCell("Emissão", "ops", "emissao", "", "th")}
+          ${sortableCell("OS", "ops", "osFull", "", "th")}
+          ${sortableCell("Código", "ops", "codigo", "", "th")}
+          ${sortableCell("Descrição", "ops", "descricao", "", "th")}
+          ${sortableCell("Operação", "ops", "operacao", "", "th")}
+          ${sortableCell("Tempo", "ops", "tempoMin", "num", "th")}
+          ${sortableCell("Posto", "ops", "posto", "", "th")}
+          ${sortableCell("Setor", "ops", "setor", "", "th")}
+          ${sortableCell("Operador", "ops", "operador", "", "th")}
+          ${sortableCell("Dia Operação", "ops", "diaOperacao", "", "th")}
           ${apontadoHeaders}
         </tr>
       </thead>
@@ -578,16 +685,25 @@ function buildResumoMensalSetor(setorNome) {
     x.tempoSeg += r.tempoMin * 60;
   }
 
-  const months = [...byMonth.values()]
-    .map((m) => ({
+  const months = sortItems(
+    [...byMonth.values()].map((m) => ({
       key: m.key,
       year: m.year,
       month: m.month,
       label: m.label,
       qtdeOs: m.osSet.size,
       tempoSeg: m.tempoSeg,
-    }))
-    .sort((a, b) => a.key.localeCompare(b.key));
+    })),
+    state.sort.cronograma.key,
+    state.sort.cronograma.dir,
+    {
+      key: (m) => m.key,
+      label: (m) => m.label,
+      qtdeOs: (m) => m.qtdeOs,
+      tempoSeg: (m) => m.tempoSeg,
+      setor: () => setorNome,
+    }
+  );
   const totalQtde = months.reduce((a, m) => a + m.qtdeOs, 0);
   const totalSeg = months.reduce((a, m) => a + m.tempoSeg, 0);
   return { setor: setorNome, months, totalQtde, totalSeg, semEmissao: rows.filter((r) => !r.emissao).length };
@@ -628,10 +744,10 @@ function renderResumoMensalSetor(setorNome) {
       <table class="resumo-mensal">
         <thead>
           <tr>
-            <th>Setor da Fábrica</th>
-            <th>Meses</th>
-            <th class="num">Qtde OS Aberta</th>
-            <th class="num">T. Produção Seg.</th>
+            ${sortableCell("Setor da Fábrica", "cronograma", "setor", "", "th")}
+            ${sortableCell("Meses", "cronograma", "key", "", "th")}
+            ${sortableCell("Qtde OS Aberta", "cronograma", "qtdeOs", "num", "th")}
+            ${sortableCell("T. Produção Seg.", "cronograma", "tempoSeg", "num", "th")}
           </tr>
         </thead>
         <tbody>
@@ -649,7 +765,21 @@ function renderResumoMensalSetor(setorNome) {
 function renderCronograma() {
   const hoursPerDay = Number($("fHours").value) || 8;
   const sch = ensureSchedule();
-  const bySetor = window.CargaSchedule.groupBySetor(sch);
+  let bySetor = window.CargaSchedule.groupBySetor(sch);
+
+  if (state.sort.cronograma.key === "setor") {
+    bySetor = sortItems(bySetor, "setor", state.sort.cronograma.dir, {
+      setor: (s) => s.setor,
+    });
+  } else if (
+    state.sort.cronograma.key === "qtdeOs" ||
+    state.sort.cronograma.key === "tempoSeg"
+  ) {
+    bySetor = sortItems(bySetor, state.sort.cronograma.key, state.sort.cronograma.dir, {
+      qtdeOs: (s) => s.totalOps,
+      tempoSeg: (s) => s.totalHoras,
+    });
+  }
 
   $("btnExport").disabled = !sch.scheduled.length;
   $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · ${fmtHours(hoursPerDay)}/posto (capac. por setor)`;
@@ -722,6 +852,131 @@ function montarCronogramaPorSetor() {
   );
 }
 
+const PRINT_TABS = {
+  resumo: {
+    title: "Resumo por setor",
+    bodyId: "resumoTree",
+    metaId: "resumoMeta",
+  },
+  carga: {
+    title: "Carga por setor",
+    bodyId: "cargaList",
+    metaId: "cargaMeta",
+  },
+  ops: {
+    title: "Operações",
+    bodyId: "opsTable",
+    metaId: "opsMeta",
+  },
+  cronograma: {
+    title: "Cronograma semanal",
+    bodyId: "cronGrid",
+    metaId: "cronMeta",
+  },
+};
+
+function filterSummaryForPrint() {
+  const parts = [];
+  const tipo = $("fTipo").value;
+  const setor = $("fSetor").value;
+  const posto = $("fPosto").value;
+  const operador = $("fOperador").value;
+  const status = $("fStatus").value;
+  const search = ($("fSearch").value || "").trim();
+  if (tipo) parts.push(`Tipo: ${tipo}`);
+  if (setor) parts.push(`Setor: ${setor}`);
+  if (posto) parts.push(`Posto: ${posto}`);
+  if (operador) parts.push(`Operador: ${operador}`);
+  if (status) parts.push(`Status: ${status}`);
+  if (search) parts.push(`Busca: ${search}`);
+  if (state.activeTab === "carga" || state.activeTab === "cronograma") {
+    parts.push(`Horizonte: ${$("fWeeks").value} sem.`);
+    parts.push(`Horas/dia: ${$("fHours").value}`);
+  }
+  if (state.activeTab === "cronograma" && $("fStart").value) {
+    parts.push(`Início: ${$("fStart").value}`);
+  }
+  if (state.activeTab === "carga") {
+    const os = ($("fCargaOs")?.value || "").trim();
+    if (os) parts.push(`Filtro OS: ${os}`);
+  }
+  return parts.length ? parts.join(" · ") : "Sem filtros aplicados";
+}
+
+function printTab(tabName) {
+  const cfg = PRINT_TABS[tabName];
+  if (!cfg) return;
+  if (state.activeTab !== tabName) setTab(tabName);
+
+  const bodyEl = $(cfg.bodyId);
+  const metaEl = $(cfg.metaId);
+  if (!bodyEl) return;
+
+  const content = bodyEl.innerHTML.trim();
+  if (!content || content.includes('class="empty"')) {
+    setBanner(`Nada para imprimir em “${cfg.title}”.`, true);
+    return;
+  }
+
+  const cssHref = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+    .map((l) => l.href)
+    .filter(Boolean);
+  const meta = metaEl?.textContent?.trim() || "";
+  const filters = filterSummaryForPrint();
+  const printedAt = new Date().toLocaleString("pt-BR");
+
+  const win = window.open("", "_blank");
+  if (!win) {
+    setBanner("Permita pop-ups para imprimir.", true);
+    return;
+  }
+
+  win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escapeHtml(cfg.title)} — Metalquip</title>
+  ${cssHref.map((h) => `<link rel="stylesheet" href="${h}" />`).join("\n  ")}
+  <style>
+    body { background: #fff; margin: 0; padding: 16px 20px 28px; }
+    .print-head { margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 2px solid #2f4a63; }
+    .print-head h1 { margin: 0 0 0.25rem; font-size: 1.25rem; color: #2f4a63; }
+    .print-head .sub { margin: 0; color: #5c6570; font-size: 0.85rem; }
+    .print-body { max-height: none !important; overflow: visible !important; }
+    .table-wrap, .panel-body { max-height: none !important; overflow: visible !important; }
+    .tree-row.header, table.data th { position: static !important; }
+    .sortable { cursor: default !important; }
+    .carga-sort-bar { break-inside: avoid; }
+    .load-block, .schedule-setor, .tree-ops-wrap, table.data, table.resumo-mensal { break-inside: avoid; }
+    .ops-input, .load-toggle .toggle { display: none !important; }
+    .load-toggle { pointer-events: none; border: none; background: transparent; padding: 0; color: inherit; }
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="print-head">
+    <h1>Metalquip — ${escapeHtml(cfg.title)}</h1>
+    <p class="sub">${escapeHtml(meta)}</p>
+    <p class="sub">${escapeHtml(filters)}</p>
+    <p class="sub">Impresso em ${escapeHtml(printedAt)}</p>
+  </header>
+  <div class="print-body">${content}</div>
+  <script>
+    window.addEventListener("load", function () {
+      setTimeout(function () {
+        window.focus();
+        window.print();
+      }, 150);
+    });
+  <\/script>
+</body>
+</html>`);
+  win.document.close();
+}
+
 function refresh() {
   applyFilters();
   renderKpis();
@@ -752,6 +1007,64 @@ function escapeHtml(s) {
 
 function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+function compareSortValues(a, b) {
+  if (a == null && b == null) return 0;
+  if (a == null || a === "") return 1;
+  if (b == null || b === "") return -1;
+  if (typeof a === "number" && typeof b === "number") {
+    if (Number.isNaN(a) && Number.isNaN(b)) return 0;
+    if (Number.isNaN(a)) return 1;
+    if (Number.isNaN(b)) return -1;
+    return a - b;
+  }
+  if (a instanceof Date && b instanceof Date) return a - b;
+  return String(a).localeCompare(String(b), "pt-BR", { numeric: true, sensitivity: "base" });
+}
+
+function sortItems(items, key, dir, getters = {}) {
+  if (!key) return items;
+  const get = getters[key] || ((item) => item[key]);
+  const mul = dir === "desc" ? -1 : 1;
+  return [...items].sort((a, b) => mul * compareSortValues(get(a), get(b)));
+}
+
+function toggleSort(scope, key) {
+  const s = state.sort[scope];
+  if (!s) return;
+  if (s.key === key) {
+    s.dir = s.dir === "asc" ? "desc" : "asc";
+  } else {
+    s.key = key;
+    s.dir = "asc";
+  }
+}
+
+function sortMark(scope, key) {
+  const s = state.sort[scope];
+  if (!s || s.key !== key) return "";
+  return s.dir === "asc" ? " ▲" : " ▼";
+}
+
+function sortableCell(label, scope, key, extraClass = "", tag = "div") {
+  const s = state.sort[scope];
+  const active = s && s.key === key ? ` sorted ${s.dir}` : "";
+  const cls = `sortable${active}${extraClass ? ` ${extraClass}` : ""}`;
+  return `<${tag} class="${cls}" data-sort-scope="${escapeAttr(scope)}" data-sort-key="${escapeAttr(key)}" role="button" tabindex="0" title="Ordenar por ${escapeAttr(label)}">${escapeHtml(label)}${sortMark(scope, key)}</${tag}>`;
+}
+
+function handleSortClick(e) {
+  const el = e.target.closest("[data-sort-key]");
+  if (!el) return false;
+  const scope = el.getAttribute("data-sort-scope");
+  const key = el.getAttribute("data-sort-key");
+  if (!scope || !key) return false;
+  e.preventDefault();
+  e.stopPropagation();
+  toggleSort(scope, key);
+  refresh();
+  return true;
 }
 
 function setBanner(msg, isError = false) {
@@ -800,6 +1113,7 @@ function bindEvents() {
   });
 
   $("resumoTree").addEventListener("click", (e) => {
+    if (handleSortClick(e)) return;
     const setorEl = e.target.closest("[data-expand-setor]");
     if (setorEl) {
       const key = setorEl.getAttribute("data-expand-setor");
@@ -834,6 +1148,7 @@ function bindEvents() {
     if (input) updateCargaItemFromInput(input);
   });
   $("cargaList").addEventListener("click", (e) => {
+    if (handleSortClick(e)) return;
     if (e.target.closest("[data-ops-setor]")) return;
     const btn = e.target.closest("[data-expand-carga-setor]");
     if (!btn) return;
@@ -846,9 +1161,21 @@ function bindEvents() {
     if (state.activeTab === "carga") renderCarga();
   });
 
+  $("opsTable").addEventListener("click", (e) => {
+    handleSortClick(e);
+  });
+
+  $("cronGrid").addEventListener("click", (e) => {
+    handleSortClick(e);
+  });
+
   $("btnReload").addEventListener("click", () => loadData());
 
   $("btnExport").addEventListener("click", () => montarCronogramaPorSetor());
+
+  document.querySelectorAll("[data-print-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => printTab(btn.getAttribute("data-print-tab")));
+  });
 }
 
 document.addEventListener("DOMContentLoaded", () => {

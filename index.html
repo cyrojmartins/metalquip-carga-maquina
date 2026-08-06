@@ -85,16 +85,22 @@
 
       <section id="tab-resumo" class="panel tab-panel">
         <div class="panel-head">
-          <h2>Setor → Posto → Operador → OS</h2>
-          <span class="muted" id="resumoMeta"></span>
+          <div class="panel-head-text">
+            <h2>Setor → Posto → Operador → OS</h2>
+            <span class="muted" id="resumoMeta"></span>
+          </div>
+          <button type="button" class="secondary btn-print" data-print-tab="resumo">Imprimir</button>
         </div>
         <div class="panel-body" id="resumoTree"></div>
       </section>
 
       <section id="tab-carga" class="panel tab-panel hidden">
         <div class="panel-head">
-          <h2>Horas abertas vs. capacidade do horizonte</h2>
-          <span class="muted" id="cargaMeta"></span>
+          <div class="panel-head-text">
+            <h2>Horas abertas vs. capacidade do horizonte</h2>
+            <span class="muted" id="cargaMeta"></span>
+          </div>
+          <button type="button" class="secondary btn-print" data-print-tab="carga">Imprimir</button>
         </div>
         <div class="carga-toolbar padded">
           <label class="carga-filter" for="fCargaOs">
@@ -107,16 +113,22 @@
 
       <section id="tab-ops" class="panel tab-panel hidden">
         <div class="panel-head">
-          <h2>Lista de operações</h2>
-          <span class="muted" id="opsMeta"></span>
+          <div class="panel-head-text">
+            <h2>Lista de operações</h2>
+            <span class="muted" id="opsMeta"></span>
+          </div>
+          <button type="button" class="secondary btn-print" data-print-tab="ops">Imprimir</button>
         </div>
         <div class="panel-body table-wrap" id="opsTable"></div>
       </section>
 
       <section id="tab-cronograma" class="panel tab-panel hidden">
         <div class="panel-head">
-          <h2>Grade semanal por setor (operações abertas)</h2>
-          <span class="muted" id="cronMeta"></span>
+          <div class="panel-head-text">
+            <h2>Grade semanal por setor (operações abertas)</h2>
+            <span class="muted" id="cronMeta"></span>
+          </div>
+          <button type="button" class="secondary btn-print" data-print-tab="cronograma">Imprimir</button>
         </div>
         <div class="panel-body" id="cronGrid"></div>
       </section>
