@@ -1,6 +1,7 @@
 /**
  * Agendamento heurístico das operações abertas por setor.
- * Capacidade diária do setor = (horas/dia por posto) × qtde de postos do setor.
+ * Capacidade diária do setor = (horas/dia por recurso) × qtde de recursos
+ * (override manual de operadores, ou nº de postos com ops abertas).
  */
 
 function startOfDay(d) {
@@ -43,12 +44,14 @@ function weekdayLabel(d) {
 }
 
 /**
- * @param {Array} allRows - todas as operações (aberto + fechada)
+ * @param {Array} allRows - todas as operações (aberto + fechada) — precedência usa fechadas
  * @param {object} options
  * @param {Date} options.startDate
  * @param {number} options.weeks - horizonte em semanas
- * @param {number} options.hoursPerDay - capacidade diária por posto (somada no setor)
+ * @param {number} options.hoursPerDay - capacidade diária por posto/recurso
  * @param {string|null} options.postoFilter
+ * @param {object} [options.recursosPorSetor] - override de qtde de recursos (operadores) por setor
+ * @param {Array} [options.openRows] - subset de ops abertas a agendar (filtros da UI)
  */
 function buildSchedule(allRows, options) {
   const {
@@ -56,12 +59,14 @@ function buildSchedule(allRows, options) {
     weeks = 2,
     hoursPerDay = 8,
     postoFilter = null,
+    recursosPorSetor = {},
+    openRows = null,
   } = options;
 
   const workDays = nextWeekdays(startDate, weeks * 5);
-  const capacityPerPostoMin = hoursPerDay * 60;
+  const capacityPerRecursoMin = hoursPerDay * 60;
 
-  // precedência: seq N-1 fechada ou já agendada
+  // precedência: seq N-1 fechada ou já agendada (sempre com o universo completo)
   const byOs = new Map();
   for (const r of allRows) {
     if (!byOs.has(r.osBase)) byOs.set(r.osBase, []);
@@ -75,7 +80,7 @@ function buildSchedule(allRows, options) {
     allRows.filter((r) => r.status === "fechada").map((r) => `${r.osBase}#${r.seq}`)
   );
 
-  let openOps = allRows.filter((r) => r.status === "aberto");
+  let openOps = (openRows || allRows).filter((r) => r.status === "aberto");
   if (postoFilter) {
     openOps = openOps.filter((r) => r.posto === postoFilter);
   }
@@ -88,7 +93,7 @@ function buildSchedule(allRows, options) {
     return a.seq - b.seq;
   });
 
-  // postos por setor → capacidade diária do setor
+  // postos por setor → capacidade diária (override por recursos/operadores quando informado)
   const postosPorSetor = new Map();
   for (const op of openOps) {
     if (!postosPorSetor.has(op.setor)) postosPorSetor.set(op.setor, new Set());
@@ -96,11 +101,16 @@ function buildSchedule(allRows, options) {
   }
 
   const capacityMinBySetor = new Map();
+  const recursosBySetor = new Map();
   const remaining = new Map(); // setor -> minutos restantes por dia
   const setores = [...postosPorSetor.keys()].sort((a, b) => a.localeCompare(b, "pt-BR"));
   for (const s of setores) {
     const nPostos = postosPorSetor.get(s).size || 1;
-    const dayCap = capacityPerPostoMin * nPostos;
+    const override = Number(recursosPorSetor[s]);
+    const nRecursos =
+      Number.isFinite(override) && override >= 1 ? Math.floor(override) : nPostos;
+    const dayCap = capacityPerRecursoMin * nRecursos;
+    recursosBySetor.set(s, nRecursos);
     capacityMinBySetor.set(s, dayCap);
     remaining.set(
       s,
@@ -130,7 +140,7 @@ function buildSchedule(allRows, options) {
         continue;
       }
       const caps = remaining.get(op.setor);
-      const dayCap = capacityMinBySetor.get(op.setor) || capacityPerPostoMin;
+      const dayCap = capacityMinBySetor.get(op.setor) || capacityPerRecursoMin;
       if (!caps) {
         i++;
         continue;
@@ -142,13 +152,16 @@ function buildSchedule(allRows, options) {
           op.tempoMin > dayCap && caps[d] === dayCap;
         if (!fits && !oversizedTakesFullDay) continue;
 
-        caps[d] -= Math.min(op.tempoMin, caps[d]);
+        const used = Math.min(op.tempoMin, caps[d]);
+        caps[d] -= used;
         const key = `${op.osBase}#${op.seq}`;
         scheduled.push({
           ...op,
           dataAgenda: workDays[d],
           dataAgendaRaw: formatDate(workDays[d]),
           diaIndex: d,
+          oversized: op.tempoMin > dayCap,
+          minutosAlocados: used,
         });
         scheduledKeys.add(key);
         pending.splice(i, 1);
@@ -182,14 +195,23 @@ function buildSchedule(allRows, options) {
   }
 
   const bySetor = [...bySetorMap.entries()]
-    .map(([setor, days]) => ({
-      setor,
-      days,
-      nPostos: postosPorSetor.get(setor)?.size || 0,
-      capacityHorasDia: (capacityMinBySetor.get(setor) || capacityPerPostoMin) / 60,
-      totalHoras: days.reduce((a, d) => a + d.horas, 0),
-      totalOps: days.reduce((a, d) => a + d.ops.length, 0),
-    }))
+    .map(([setor, days]) => {
+      const dayCapMin = capacityMinBySetor.get(setor) || capacityPerRecursoMin;
+      const daysWithLoad = days.map((d) => ({
+        ...d,
+        capacityHoras: dayCapMin / 60,
+        pct: dayCapMin > 0 ? Math.min(999, (100 * d.horas * 60) / dayCapMin) : 0,
+      }));
+      return {
+        setor,
+        days: daysWithLoad,
+        nPostos: postosPorSetor.get(setor)?.size || 0,
+        nRecursos: recursosBySetor.get(setor) || 0,
+        capacityHorasDia: dayCapMin / 60,
+        totalHoras: daysWithLoad.reduce((a, d) => a + d.horas, 0),
+        totalOps: daysWithLoad.reduce((a, d) => a + d.ops.length, 0),
+      };
+    })
     .sort((a, b) => b.totalHoras - a.totalHoras || a.setor.localeCompare(b.setor, "pt-BR"));
 
   // compat: byPosto derivado para quem ainda agrupa por posto na visualização auxiliar
@@ -234,7 +256,8 @@ function scheduleToCsv(schedule) {
     "Código Item",
     "Descrição",
     "Operação",
-    "Tempo (min)",
+    "Tempo Oper (s)",
+    "T. Produção (s)",
     "Tempo (h)",
     "Tipo",
     "Status",
@@ -260,7 +283,8 @@ function scheduleToCsv(schedule) {
         r.codigo,
         `"${r.descricao.replace(/"/g, '""')}"`,
         r.operacao,
-        String(r.tempoMin).replace(".", ","),
+        String(r.tempoOper ?? r.tempoMin).replace(".", ","),
+        String(r.tempoSeg ?? r.tempoMin * 60).replace(".", ","),
         r.tempoHoras.toFixed(2).replace(".", ","),
         r.tipo,
         "aberto",
@@ -377,7 +401,7 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
 </head>
 <body>
   <h1>${escapeHtml(titulo)}</h1>
-  <div class="sub">Gerado em ${escapeHtml(geradoEm)} · ${schedule.scheduled.length} operações · horizonte ${schedule.weeks} semana(s) · ${schedule.hoursPerDay} h/dia por posto (capacidade acumulada por setor)</div>
+  <div class="sub">Gerado em ${escapeHtml(geradoEm)} · ${schedule.scheduled.length} operações · horizonte ${schedule.weeks} semana(s) · ${schedule.hoursPerDay} h/dia por recurso (capacidade acumulada por setor)</div>
   ${setoresHtml || "<p class='empty'>Nenhuma operação agendada.</p>"}
 </body>
 </html>`;

@@ -94,11 +94,6 @@ function applyFilters() {
 function rebuildDependentFilters() {
   const tipo = $("fTipo").value;
   const setor = $("fSetor").value;
-  const base = state.allRows.filter((r) => {
-    if (tipo && r.tipo !== tipo) return false;
-    if (setor && r.setor !== setor) return false;
-    return true;
-  });
 
   fillSelect($("fSetor"), window.CargaParse.uniqueValues(
     tipo ? state.allRows.filter((r) => r.tipo === tipo) : state.allRows,
@@ -262,8 +257,8 @@ function renderResumo() {
               ${sortableCell("Código", "resumoOps", "codigo")}
               ${sortableCell("Descrição", "resumoOps", "descricao")}
               ${sortableCell("Qtde Lote", "resumoOps", "qtdLote", "num")}
-              ${sortableCell("Tempo unit.", "resumoOps", "tempoUnit", "num")}
-              ${sortableCell("Tempo total", "resumoOps", "tempoTotal", "num")}
+              ${sortableCell("Tempo Oper (s)", "resumoOps", "tempoUnit", "num")}
+              ${sortableCell("T. Produção (s)", "resumoOps", "tempoTotal", "num")}
               ${sortableCell("Qtde Final", "resumoOps", "qtdeFinal", "num")}
               ${sortableCell("Tempo/un. real (s)", "resumoOps", "tempoUnitApontado", "num", "div")}
             </div>`
@@ -273,8 +268,8 @@ function renderResumo() {
               ${sortableCell("Código", "resumoOps", "codigo")}
               ${sortableCell("Descrição", "resumoOps", "descricao")}
               ${sortableCell("Qtde Lote", "resumoOps", "qtdLote", "num")}
-              ${sortableCell("Tempo unit.", "resumoOps", "tempoUnit", "num")}
-              ${sortableCell("Tempo total", "resumoOps", "tempoTotal", "num")}
+              ${sortableCell("Tempo Oper (s)", "resumoOps", "tempoUnit", "num")}
+              ${sortableCell("T. Produção (s)", "resumoOps", "tempoTotal", "num")}
             </div>`;
 
         parts.push(`
@@ -315,15 +310,15 @@ function renderResumo() {
   $("resumoTree").innerHTML = `<div class="tree">${parts.join("")}</div>`;
 }
 
-function getOperadoresSetor(setor) {
+function getOperadoresSetor(setor, defaultN = 1) {
   const n = Number(state.operadoresPorSetor[setor]);
-  return Number.isFinite(n) && n >= 1 ? n : 1;
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : Math.max(1, defaultN);
 }
 
 function renderCarga() {
   const weeks = Number($("fWeeks").value) || 2;
   const hoursPerDay = Number($("fHours").value) || 8;
-  const capacityPerOperador = weeks * 5 * hoursPerDay;
+  const capacityPerRecurso = weeks * 5 * hoursPerDay;
   const osSearch = ($("fCargaOs")?.value || "").trim().toLowerCase();
   const opsGetters = {
     osFull: (r) => r.osFull,
@@ -355,14 +350,15 @@ function renderCarga() {
       codigo: r.codigo,
       descricao: r.descricao,
       qtdLote: r.qtdLote,
-      tempoUnit: r.tempoMin,
-      tempoTotal: r.qtdLote * r.tempoMin,
+      tempoUnit: r.tempoOper,
+      tempoTotal: r.tempoSeg,
     });
   }
 
   let list = [...bySetor.values()]
     .map((item) => {
-      const operadores = getOperadoresSetor(item.setor);
+      const nPostos = item.postos.size || 1;
+      const operadores = getOperadoresSetor(item.setor, nPostos);
       let operacoes = sortItems(
         item.operacoes,
         state.sort.cargaOps.key,
@@ -377,9 +373,9 @@ function renderCarga() {
       }
       return {
         ...item,
-        nPostos: item.postos.size,
+        nPostos,
         operadores,
-        capacity: capacityPerOperador * operadores,
+        capacity: capacityPerRecurso * operadores,
         operacoes,
       };
     });
@@ -398,7 +394,7 @@ function renderCarga() {
     for (const item of list) state.expandedCargaSetores.add(item.setor);
   }
 
-  $("cargaMeta").textContent = `Capacidade: ${fmtHours(capacityPerOperador)} por operador × qtde operadores (${weeks} sem. × 5 dias × ${hoursPerDay} h)`;
+  $("cargaMeta").textContent = `Capacidade: ${fmtHours(capacityPerRecurso)} por recurso × qtde operadores (padrão = postos) · ${weeks} sem. × 5 dias × ${hoursPerDay} h`;
 
   if (!list.length) {
     $("cargaList").innerHTML = `<div class="empty">${
@@ -416,10 +412,12 @@ function renderCarga() {
       ${sortableCell("Operações", "carga", "ops", "num")}
       ${sortableCell("Capacidade", "carga", "capacity", "num")}
       ${sortableCell("Operadores", "carga", "operadores", "num")}
+      ${sortableCell("Postos", "carga", "nPostos", "num")}
     </div>
     <div class="load-list">${list
     .map((item) => {
-      const pct = item.capacity > 0 ? Math.min(100, (100 * item.horas) / item.capacity) : 0;
+      const pctRaw = item.capacity > 0 ? (100 * item.horas) / item.capacity : 0;
+      const pct = Math.min(100, pctRaw);
       const over = item.horas > item.capacity;
       const open = state.expandedCargaSetores.has(item.setor);
       const opsTable = open
@@ -430,8 +428,8 @@ function renderCarga() {
             ${sortableCell("Código", "cargaOps", "codigo")}
             ${sortableCell("Descrição", "cargaOps", "descricao")}
             ${sortableCell("Qtde Lote", "cargaOps", "qtdLote", "num")}
-            ${sortableCell("Tempo unit.", "cargaOps", "tempoUnit", "num")}
-            ${sortableCell("Tempo total", "cargaOps", "tempoTotal", "num")}
+            ${sortableCell("Tempo Oper (s)", "cargaOps", "tempoUnit", "num")}
+            ${sortableCell("T. Produção (s)", "cargaOps", "tempoTotal", "num")}
           </div>
           ${item.operacoes
             .map(
@@ -450,8 +448,8 @@ function renderCarga() {
         : "";
 
       return `
-        <div class="load-block">
-          <div class="load-item" data-setor="${escapeAttr(item.setor)}" data-horas="${item.horas}" data-ops="${item.ops}" data-cap-base="${capacityPerOperador}">
+        <div class="load-block${over ? " is-over" : ""}">
+          <div class="load-item" data-setor="${escapeAttr(item.setor)}" data-horas="${item.horas}" data-ops="${item.ops}" data-cap-base="${capacityPerRecurso}">
             <div class="load-info">
               <button type="button" class="load-toggle" data-expand-carga-setor="${escapeAttr(item.setor)}" aria-expanded="${open}">
                 <span class="toggle">${open ? "−" : "+"}</span>
@@ -468,9 +466,13 @@ function renderCarga() {
                   data-ops-setor="${escapeAttr(item.setor)}"
                   aria-label="Quantidade de operadores — ${escapeAttr(item.setor)}"
                 />
+                <span class="ops-hint">${fmtNum(item.nPostos)} posto${item.nPostos === 1 ? "" : "s"}</span>
               </label>
             </div>
-            <div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>
+            <div class="bar-wrap">
+              <div class="bar ${over ? "over" : ""}"><span style="width:${pct}%"></span></div>
+              <div class="load-pct ${over ? "over" : ""}">${fmtNum(pctRaw, 0)}%</div>
+            </div>
             <div class="load-meta">${fmtHours(item.horas)} / ${fmtHours(item.capacity)} · ${fmtNum(item.ops)} ops${over ? " · sobrecarga" : ""}</div>
           </div>
           ${opsTable}
@@ -494,13 +496,23 @@ function updateCargaItemFromInput(input) {
   const ops = Number(item.dataset.ops) || 0;
   const capBase = Number(item.dataset.capBase) || 0;
   const capacity = capBase * n;
-  const pct = capacity > 0 ? Math.min(100, (100 * horas) / capacity) : 0;
+  const pctRaw = capacity > 0 ? (100 * horas) / capacity : 0;
+  const pct = Math.min(100, pctRaw);
   const over = horas > capacity;
 
   const bar = item.querySelector(".bar");
   const span = bar?.querySelector("span");
   if (bar) bar.classList.toggle("over", over);
   if (span) span.style.width = `${pct}%`;
+
+  const pctEl = item.querySelector(".load-pct");
+  if (pctEl) {
+    pctEl.textContent = `${fmtNum(pctRaw, 0)}%`;
+    pctEl.classList.toggle("over", over);
+  }
+
+  const block = item.closest(".load-block");
+  if (block) block.classList.toggle("is-over", over);
 
   const meta = item.querySelector(".load-meta");
   if (meta) {
@@ -518,6 +530,8 @@ function renderOps() {
     codigo: (r) => r.codigo,
     descricao: (r) => r.descricao,
     operacao: (r) => r.operacao,
+    tempoOper: (r) => r.tempoOper,
+    tempoSeg: (r) => r.tempoSeg,
     tempoMin: (r) => r.tempoMin,
     posto: (r) => r.posto,
     setor: (r) => r.setor,
@@ -558,14 +572,15 @@ function renderOps() {
         : "";
       return `
     <tr>
-      <td>${badge(r.status)}</td>
+      <td>${badge(r.status)}${r.dataInvalida ? ` <span class="badge invalid" title="Dia Operação inválido">data?</span>` : ""}</td>
       <td>${escapeHtml(r.tipo)}</td>
       <td>${escapeHtml(r.emissaoRaw)}</td>
       <td>${escapeHtml(r.osFull)}</td>
       <td>${escapeHtml(r.codigo)}</td>
       <td class="wrap">${escapeHtml(r.descricao)}</td>
       <td>${escapeHtml(r.operacao)}</td>
-      <td class="num">${fmtNum(r.tempoMin, 0)}</td>
+      <td class="num">${fmtNum(r.tempoOper, 0)}</td>
+      <td class="num">${fmtNum(r.tempoSeg, 0)}</td>
       <td>${escapeHtml(r.posto)}</td>
       <td>${escapeHtml(r.setor)}</td>
       <td>${escapeHtml(r.operador || "—")}</td>
@@ -590,7 +605,8 @@ function renderOps() {
           ${sortableCell("Código", "ops", "codigo", "", "th")}
           ${sortableCell("Descrição", "ops", "descricao", "", "th")}
           ${sortableCell("Operação", "ops", "operacao", "", "th")}
-          ${sortableCell("Tempo", "ops", "tempoMin", "num", "th")}
+          ${sortableCell("Tempo Oper (s)", "ops", "tempoOper", "num", "th")}
+          ${sortableCell("T. Produção (s)", "ops", "tempoSeg", "num", "th")}
           ${sortableCell("Posto", "ops", "posto", "", "th")}
           ${sortableCell("Setor", "ops", "setor", "", "th")}
           ${sortableCell("Operador", "ops", "operador", "", "th")}
@@ -608,17 +624,36 @@ function ensureSchedule() {
   const postoFilter = $("fPosto").value || null;
   const tipo = $("fTipo").value;
   const setor = $("fSetor").value;
-  const baseRows = state.allRows.filter((r) => {
+  const operador = $("fOperador").value;
+  const search = ($("fSearch").value || "").trim().toLowerCase();
+
+  // Cronograma sempre agenda abertas; respeita demais filtros da UI.
+  // Precedência (OS seq) usa o universo completo em allRows.
+  const openRows = state.allRows.filter((r) => {
+    if (r.status !== "aberto") return false;
     if (tipo && r.tipo !== tipo) return false;
     if (setor && r.setor !== setor) return false;
+    if (postoFilter && r.posto !== postoFilter) return false;
+    if (operador) {
+      const op = r.operador || "(sem operador)";
+      if (op !== operador) return false;
+    }
+    if (search) {
+      const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
     return true;
   });
 
-  state.schedule = window.CargaSchedule.buildSchedule(baseRows, {
+  const recursosPorSetor = { ...state.operadoresPorSetor };
+
+  state.schedule = window.CargaSchedule.buildSchedule(state.allRows, {
     startDate: parseStartDate(),
     weeks,
     hoursPerDay,
-    postoFilter,
+    postoFilter: null, // já aplicado em openRows
+    openRows,
+    recursosPorSetor,
   });
   return state.schedule;
 }
@@ -630,7 +665,7 @@ function renderDayChips(days) {
         .slice(0, 12)
         .map(
           (op) => `
-        <div class="op-chip" title="${escapeAttr(op.descricao)} · ${escapeAttr(op.posto)}">
+        <div class="op-chip${op.oversized ? " oversized" : ""}" title="${escapeAttr(op.descricao)} · ${escapeAttr(op.posto)}${op.oversized ? " · excede capacidade do dia" : ""}">
           <div class="os">${escapeHtml(op.osBase)}-${String(op.seq).padStart(2, "0")}</div>
           <div>${escapeHtml(op.operacao)}</div>
           <div class="muted">${fmtHours(op.tempoHoras)} · ${escapeHtml(op.posto)}</div>
@@ -639,12 +674,17 @@ function renderDayChips(days) {
         .join("");
       const more =
         d.ops.length > 12
-          ? `<div class="muted" style="padding:0.2rem 0.35rem">+${d.ops.length - 12} ops</div>`
+          ? `<div class="muted day-more">+${d.ops.length - 12} ops</div>`
           : "";
+      const capH = d.capacityHoras != null ? d.capacityHoras : null;
+      const pctRaw = d.pct != null ? d.pct : capH > 0 ? (100 * d.horas) / capH : 0;
+      const pctBar = Math.min(100, pctRaw);
+      const over = pctRaw > 100;
       return `
-        <div class="day-col">
-          <div class="day-head"><span>${escapeHtml(d.label)}</span><span>${fmtHours(d.horas)}</span></div>
-          <div class="day-ops">${chips || `<div class="muted" style="padding:0.35rem">livre</div>`}${more}</div>
+        <div class="day-col${over ? " over" : d.ops.length ? " has-ops" : ""}">
+          <div class="day-head"><span>${escapeHtml(d.label)}</span><span>${fmtHours(d.horas)}${capH != null ? ` / ${fmtHours(capH)}` : ""}</span></div>
+          <div class="day-cap-bar" title="${fmtNum(pctRaw, 0)}% da capacidade"><span style="width:${pctBar}%"></span></div>
+          <div class="day-ops">${chips || `<div class="muted day-free">livre</div>`}${more}</div>
         </div>`;
     })
     .join("");
@@ -656,11 +696,22 @@ const MES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set"
 function buildResumoMensalSetor(setorNome) {
   const tipo = $("fTipo").value;
   const posto = $("fPosto").value;
+  const operador = $("fOperador").value;
+  const search = ($("fSearch").value || "").trim().toLowerCase();
+  // Alinha com ensureSchedule: ignora filtro de status, sempre ops abertas
   const rows = state.allRows.filter((r) => {
     if (r.status !== "aberto") return false;
     if (r.setor !== setorNome) return false;
     if (tipo && r.tipo !== tipo) return false;
     if (posto && r.posto !== posto) return false;
+    if (operador) {
+      const op = r.operador || "(sem operador)";
+      if (op !== operador) return false;
+    }
+    if (search) {
+      const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
     return true;
   });
 
@@ -682,7 +733,8 @@ function buildResumoMensalSetor(setorNome) {
     }
     const x = byMonth.get(key);
     x.osSet.add(r.osFull || r.osBase);
-    x.tempoSeg += r.tempoMin * 60;
+    // T. Produção Seg. = Qtd.Lote × Tempo Oper
+    x.tempoSeg += r.tempoSeg;
   }
 
   const months = sortItems(
@@ -733,8 +785,8 @@ function renderResumoMensalSetor(setorNome) {
       <tr>
         ${setorCell}
         <td>${escapeHtml(mesLabel)}</td>
-        <td class="num">${fmtNum(m.qtdeOs, 2)}</td>
-        <td class="num">${fmtNum(m.tempoSeg, 2)}</td>
+        <td class="num">${fmtNum(m.qtdeOs, 0)}</td>
+        <td class="num">${fmtNum(m.tempoSeg, 0)}</td>
       </tr>`;
     })
     .join("");
@@ -754,8 +806,8 @@ function renderResumoMensalSetor(setorNome) {
           ${body}
           <tr class="resumo-total">
             <td colspan="2"><strong>${escapeHtml(resumo.setor)} Total</strong></td>
-            <td class="num"><strong>${fmtNum(resumo.totalQtde, 2)}</strong></td>
-            <td class="num"><strong>${fmtNum(resumo.totalSeg, 2)}</strong></td>
+            <td class="num"><strong>${fmtNum(resumo.totalQtde, 0)}</strong></td>
+            <td class="num"><strong>${fmtNum(resumo.totalSeg, 0)}</strong></td>
           </tr>
         </tbody>
       </table>
@@ -782,7 +834,7 @@ function renderCronograma() {
   }
 
   $("btnExport").disabled = !sch.scheduled.length;
-  $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · ${fmtHours(hoursPerDay)}/posto (capac. por setor)`;
+  $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · ${fmtHours(hoursPerDay)}/recurso`;
 
   if (!bySetor.length) {
     $("cronGrid").innerHTML = `<div class="empty">Nada a agendar no filtro/horizonte atual.</div>`;
@@ -797,11 +849,13 @@ function renderCronograma() {
           : "";
       const nPostos =
         setor.nPostos != null ? ` · ${fmtNum(setor.nPostos)} postos` : "";
+      const nRec =
+        setor.nRecursos != null ? ` · ${fmtNum(setor.nRecursos)} recursos` : "";
       return `
         <section class="schedule-setor">
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
-            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)}${nPostos}${cap}</span>
+            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)}${nPostos}${nRec}${cap}</span>
           </div>
           <div class="schedule-posto">
             <div class="schedule-days">${renderDayChips(setor.days)}</div>

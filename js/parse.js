@@ -124,7 +124,14 @@ function normalizeRow(raw, tipo) {
   const diaOp = parseBrDate(raw["Dia Operação"]);
   const { osBase, seq, osFull } = splitOs(raw["Nº Ord.Serviço"]);
 
-  const tempoMin = parseBrNumber(raw["Tempo Oper"]);
+  // Tempo Oper do CSV = tempo unitário em segundos.
+  // Tempo total (s) das OS abertas = Qtd.Lote × Tempo Oper.
+  const tempoOper = parseBrNumber(raw["Tempo Oper"]);
+  const qtdLote = parseBrNumber(raw["Qtd.Lote"]);
+  const tempoSeg = qtdLote * tempoOper;
+  const tempoMin = tempoSeg / 60;
+  const tempoHoras = tempoSeg / 3600;
+
   const posto = String(raw["Posto de Trabalho"] ?? "").trim();
   const setor = String(raw["Setor da Fábrica"] ?? "").trim();
   let operador = String(raw["Nome do Operador"] ?? "").trim();
@@ -156,10 +163,12 @@ function normalizeRow(raw, tipo) {
     osFull,
     codigo: String(raw["Código Item"] ?? "").trim(),
     descricao: String(raw["Descrição do Item"] ?? "").trim(),
-    qtdLote: parseBrNumber(raw["Qtd.Lote"]),
+    qtdLote,
     operacao: String(raw["Operação da Fábrica"] ?? "").trim(),
+    tempoOper,
+    tempoSeg,
     tempoMin,
-    tempoHoras: tempoMin / 60,
+    tempoHoras,
     posto: posto || "(sem posto)",
     setor: setor || "(sem setor)",
     operador,
@@ -254,22 +263,21 @@ function buildHierarchy(rows) {
     } else {
       op.fechada += 1;
     }
-    const tempoUnit = row.tempoMin;
-    const tempoTotal = row.qtdLote * tempoUnit;
     op.operacoes.push({
       osFull: row.osFull,
       codigo: row.codigo,
       descricao: row.descricao,
       qtdLote: row.qtdLote,
       qtdeFinal: row.qtdeFinal,
-      tempoUnit,
-      tempoTotal,
+      tempoUnit: row.tempoOper,
+      tempoTotal: row.tempoSeg,
       iniciou: row.iniciou,
       terminou: row.terminou,
       duracaoMin: row.duracaoMin,
       tempoUnitApontado: row.tempoUnitApontado,
       status: row.status,
       tempoHoras: row.tempoHoras,
+      dataInvalida: row.dataInvalida,
     });
   }
 
