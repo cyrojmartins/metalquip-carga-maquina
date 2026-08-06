@@ -983,7 +983,6 @@ function renderCronogramaScheduleOnly() {
 }
 
 function renderCronograma() {
-  renderParametrosSetores();
   renderCronogramaScheduleOnly();
 }
 
@@ -1033,8 +1032,13 @@ const PRINT_TABS = {
   },
   cronograma: {
     title: "Cronograma semanal",
-    bodyId: "cronLayout",
+    bodyId: "cronGrid",
     metaId: "cronMeta",
+  },
+  parametros: {
+    title: "Parâmetros por setor",
+    bodyId: "cronSetoresTable",
+    metaId: "cronSetoresMeta",
   },
 };
 
@@ -1147,6 +1151,7 @@ function refresh() {
   if (state.activeTab === "carga") renderCarga();
   if (state.activeTab === "ops") renderOps();
   if (state.activeTab === "cronograma") renderCronograma();
+  if (state.activeTab === "parametros") renderParametrosSetores();
 }
 
 function setTab(name) {

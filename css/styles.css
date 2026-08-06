@@ -830,45 +830,7 @@ table.schedule-ops tfoot td {
   bottom: 0;
 }
 
-/* Cronograma: parâmetros ao lado da grade */
-.cron-layout {
-  display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
-  align-items: stretch;
-  min-height: min(72vh, 780px);
-}
-
-.cron-setores-panel {
-  border-right: 1px solid var(--line);
-  background: var(--surface);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.cron-setores-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.65rem;
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid var(--line);
-  background: #e8edf2;
-}
-
-.cron-setores-head h3 {
-  margin: 0;
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.cron-setores-body {
-  overflow: auto;
-  flex: 1;
-  max-height: min(68vh, 760px);
-}
-
+/* Cronograma: grade em largura total */
 .cron-schedule-panel {
   min-width: 0;
   overflow: auto;
@@ -876,19 +838,19 @@ table.schedule-ops tfoot td {
 }
 
 table.setor-params {
-  font-size: 0.76rem;
+  font-size: 0.82rem;
 }
 
 table.setor-params th,
 table.setor-params td {
-  padding: 0.35rem 0.45rem;
+  padding: 0.4rem 0.55rem;
   vertical-align: middle;
 }
 
 table.setor-params td.setor-nome {
   font-weight: 600;
   white-space: normal;
-  max-width: 140px;
+  max-width: none;
 }
 
 table.setor-params .param-input {
@@ -965,15 +927,7 @@ table.setor-params .param-calc {
     flex-direction: column;
     align-items: flex-start;
   }
-  .cron-layout {
-    grid-template-columns: 1fr;
-  }
-  .cron-setores-panel {
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-  }
-  .cron-setores-body,
   .cron-schedule-panel {
-    max-height: min(45vh, 420px);
+    max-height: min(55vh, 520px);
   }
 }
