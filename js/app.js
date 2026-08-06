@@ -660,11 +660,13 @@ function ensureSchedule() {
 
 function renderSetorOpsTable(setor) {
   const rows = [];
+  let totalTempoSeg = 0;
   for (const day of setor.days) {
     for (const op of day.ops) {
       const os = op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`;
       const tempoOper = op.tempoOper ?? 0;
       const tempoTotal = op.tempoSeg ?? (op.qtdLote || 0) * tempoOper;
+      totalTempoSeg += tempoTotal;
       const dayLabel =
         day.label || (day.data ? window.CargaSchedule.weekdayLabel(day.data) : "");
       const dataRaw =
@@ -716,6 +718,14 @@ function renderSetorOpsTable(setor) {
           </tr>
         </thead>
         <tbody>${rows.join("")}</tbody>
+        <tfoot>
+          <tr class="schedule-total">
+            <td colspan="8"><strong>Total</strong></td>
+            <td class="num"><strong>${fmtNum(totalTempoSeg, 0)}</strong></td>
+            <td></td>
+            <td class="num"><strong>${fmtHours(setor.totalHoras)}</strong></td>
+          </tr>
+        </tfoot>
       </table>
     </div>`;
 }
@@ -749,11 +759,23 @@ function renderCronograma() {
 
   $("cronGrid").innerHTML = bySetor
     .map((setor) => {
+      const totalSeg =
+        setor.totalTempoSeg != null
+          ? setor.totalTempoSeg
+          : setor.days.reduce(
+              (a, d) =>
+                a +
+                d.ops.reduce(
+                  (s, op) => s + (op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0)),
+                  0
+                ),
+              0
+            );
       return `
         <section class="schedule-setor">
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
-            <span>${fmtNum(setor.totalOps)} ops · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(hoursPerDay)}/dia</span>
+            <span>${fmtNum(setor.totalOps)} ops · ${fmtNum(totalSeg, 0)} s · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(hoursPerDay)}/dia</span>
           </div>
           ${renderSetorOpsTable(setor)}
         </section>`;

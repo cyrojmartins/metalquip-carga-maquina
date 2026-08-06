@@ -214,6 +214,15 @@ function buildSchedule(allRows, options) {
         capacityHorasDia: dayCapMin / 60,
         totalHoras: daysWithLoad.reduce((a, d) => a + d.horas, 0),
         totalOps: daysWithLoad.reduce((a, d) => a + d.ops.length, 0),
+        totalTempoSeg: daysWithLoad.reduce(
+          (a, d) =>
+            a +
+            d.ops.reduce(
+              (s, op) => s + (op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0)),
+              0
+            ),
+          0
+        ),
       };
     })
     .sort((a, b) => b.totalHoras - a.totalHoras || a.setor.localeCompare(b.setor, "pt-BR"));
@@ -321,6 +330,7 @@ function groupBySetor(schedule) {
         })),
         totalOps: 0,
         totalHoras: 0,
+        totalTempoSeg: 0,
         postos: [],
       });
     }
@@ -329,6 +339,7 @@ function groupBySetor(schedule) {
     block.days[op.diaIndex].horas += op.tempoHoras;
     block.totalOps += 1;
     block.totalHoras += op.tempoHoras;
+    block.totalTempoSeg += op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0);
   }
   return [...map.values()].sort(
     (a, b) => b.totalHoras - a.totalHoras || a.setor.localeCompare(b.setor, "pt-BR")
@@ -343,6 +354,7 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
   const setoresHtml = bySetor
     .map((setor) => {
       const rows = [];
+      let totalTempoSeg = 0;
       for (const day of setor.days) {
         for (const op of day.ops) {
           const tipoLabel =
@@ -351,6 +363,8 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
               : op.tipo === "componente"
                 ? "Componente"
                 : op.tipo || "";
+          const tempoTotal = op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0);
+          totalTempoSeg += tempoTotal;
           rows.push(`<tr>
             <td>${escapeHtml(day.label)}</td>
             <td class="center">${escapeHtml(op.dataAgendaRaw)}</td>
@@ -360,18 +374,19 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
             <td>${escapeHtml(op.descricao)}</td>
             <td class="num">${String(op.qtdLote ?? 0).replace(".", ",")}</td>
             <td class="num">${String(op.tempoOper ?? 0).replace(".", ",")}</td>
-            <td class="num">${String(op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0)).replace(".", ",")}</td>
+            <td class="num">${String(tempoTotal).replace(".", ",")}</td>
             <td>${escapeHtml(op.posto)}</td>
             <td class="num">${op.tempoHoras.toFixed(1).replace(".", ",")} h</td>
           </tr>`);
         }
       }
       const hoursPerDay = schedule.hoursPerDay ?? 8;
+      const totalSeg = setor.totalTempoSeg != null ? setor.totalTempoSeg : totalTempoSeg;
       const cap = ` · capac. ${hoursPerDay.toFixed(1).replace(".", ",")} h/dia`;
       return `
         <section class="setor">
           <h2>${escapeHtml(setor.setor)}
-            <span class="meta">${setor.totalOps} ops · ${setor.totalHoras.toFixed(1).replace(".", ",")} h${cap}</span>
+            <span class="meta">${setor.totalOps} ops · ${String(Math.round(totalSeg)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")} s · ${setor.totalHoras.toFixed(1).replace(".", ",")} h${cap}</span>
           </h2>
           ${
             rows.length
@@ -392,6 +407,14 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
                 </tr>
               </thead>
               <tbody>${rows.join("")}</tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="8"><strong>Total</strong></td>
+                  <td class="num"><strong>${String(Math.round(totalTempoSeg)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")}</strong></td>
+                  <td></td>
+                  <td class="num"><strong>${setor.totalHoras.toFixed(1).replace(".", ",")} h</strong></td>
+                </tr>
+              </tfoot>
             </table>`
               : "<p class='empty'>Sem operações neste setor.</p>"
           }
@@ -414,6 +437,7 @@ function scheduleToHtmlBySetor(schedule, meta = {}) {
   th,td{border:1px solid #c8ced6;padding:.32rem .5rem;text-align:left;vertical-align:top}
   th{background:#eef1f4;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:#4a5560;font-weight:700}
   tbody tr:nth-child(even) td{background:#f7f8fa}
+  tfoot td{background:#e8edf2;border-top:2px solid #c8ced6;font-weight:700}
   .num{text-align:right;white-space:nowrap}
   .center{text-align:center}
   .codigo{color:#1a5fb4;font-weight:600}

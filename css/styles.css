@@ -822,6 +822,14 @@ table.schedule-ops tr.oversized td {
   background: #fffbeb;
 }
 
+table.schedule-ops tfoot td {
+  background: #e8edf2;
+  border-top: 2px solid var(--line);
+  font-weight: 700;
+  position: sticky;
+  bottom: 0;
+}
+
 .status-banner {
   padding: 0.75rem 1rem;
   border-radius: var(--radius);
