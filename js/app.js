@@ -408,12 +408,7 @@ function renderCarga() {
 
   $("cargaList").innerHTML = `
     <div class="carga-sort-bar">
-      ${sortableCell("Setor", "carga", "setor")}
       ${sortableCell("Horas", "carga", "horas", "num")}
-      ${sortableCell("Operações", "carga", "ops", "num")}
-      ${sortableCell("Capacidade", "carga", "capacity", "num")}
-      ${sortableCell("Operadores", "carga", "operadores", "num")}
-      ${sortableCell("Postos", "carga", "nPostos", "num")}
     </div>
     <div class="load-list">${list
     .map((item) => {
