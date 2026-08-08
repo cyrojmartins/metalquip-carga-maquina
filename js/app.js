@@ -5,6 +5,9 @@
 /** Padrão interno de Horas/Dia ao criar parâmetros de um setor (editável em Parâmetros). */
 const DEFAULT_HORAS_DIA = 8;
 
+/** Persistência local dos parâmetros cadastrados (sobrevive a reload/deploy na mesma origem). */
+const PARAMETROS_STORAGE_KEY = "metalquip.cargaMaquina.parametrosSetor";
+
 const state = {
   allRows: [],
   filtered: [],
@@ -25,6 +28,68 @@ const state = {
     cronograma: { key: "key", dir: "asc" },
   },
 };
+
+function normalizeParametrosSetorEntry(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  let fadiga = Number(raw.fadiga);
+  let operadores = Number(raw.operadores);
+  let horasDia = Number(raw.horasDia);
+  if (!Number.isFinite(fadiga) || fadiga < 0) fadiga = 0;
+  fadiga = Math.min(100, fadiga);
+  if (!Number.isFinite(operadores) || operadores < 0) operadores = 1;
+  operadores = Math.floor(operadores);
+  if (!Number.isFinite(horasDia) || horasDia < 0) horasDia = DEFAULT_HORAS_DIA;
+  return { fadiga, operadores, horasDia };
+}
+
+function loadParametrosSetorFromStorage() {
+  try {
+    const raw = localStorage.getItem(PARAMETROS_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+
+    const restored = {};
+    for (const [nome, entry] of Object.entries(parsed)) {
+      if (!nome) continue;
+      const p = normalizeParametrosSetorEntry(entry);
+      if (p) restored[nome] = p;
+    }
+    state.parametrosSetor = restored;
+    syncOperadoresFromParametros();
+  } catch (err) {
+    console.warn("Não foi possível carregar parâmetros por setor do armazenamento local:", err);
+  }
+}
+
+function saveParametrosSetorToStorage(setorNome) {
+  try {
+    let stored = {};
+    try {
+      const raw = localStorage.getItem(PARAMETROS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          stored = parsed;
+        }
+      }
+    } catch (_) {
+      stored = {};
+    }
+
+    if (setorNome && state.parametrosSetor[setorNome]) {
+      stored[setorNome] = { ...state.parametrosSetor[setorNome] };
+    } else {
+      for (const [nome, p] of Object.entries(state.parametrosSetor)) {
+        stored[nome] = { ...p };
+      }
+    }
+
+    localStorage.setItem(PARAMETROS_STORAGE_KEY, JSON.stringify(stored));
+  } catch (err) {
+    console.warn("Não foi possível salvar parâmetros por setor no armazenamento local:", err);
+  }
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -134,17 +199,11 @@ function renderKpis() {
   const postos = new Set(rows.map((r) => r.posto)).size;
   const pct = total ? (100 * fechada) / total : 0;
 
-  const nAcabado = rows.filter((r) => r.tipo === "acabado").length;
-  const nComponente = rows.filter((r) => r.tipo === "componente").length;
-  const temTipo = rows.some((r) => r.tipo);
-  const tipoValue = temTipo ? `${fmtNum(nAcabado)} / ${fmtNum(nComponente)}` : "—";
-  const tipoHint = temTipo ? "no filtro atual" : "sem coluna Tipo";
-
   $("kpis").innerHTML = `
     <div class="kpi"><div class="label">Operações</div><div class="value">${fmtNum(total)}</div><div class="hint">${setores} setores · ${postos} postos</div></div>
     <div class="kpi"><div class="label">Aberto</div><div class="value">${fmtNum(aberto)}</div><div class="hint">${fmtHours(horasAbertas)}</div></div>
     <div class="kpi"><div class="label">Fechada</div><div class="value">${fmtNum(fechada)}</div><div class="hint">${fmtNum(pct, 1)}% concluído</div></div>
-    <div class="kpi"><div class="label">Acabado / Comp.</div><div class="value">${tipoValue}</div><div class="hint">${tipoHint}</div></div>
+    <div class="kpi"><div class="label">Acabado / Comp.</div><div class="value">${fmtNum(rows.filter((r) => r.tipo === "acabado").length)} / ${fmtNum(rows.filter((r) => r.tipo === "componente").length)}</div><div class="hint">no filtro atual</div></div>
   `;
 }
 
@@ -876,6 +935,7 @@ function updateParametrosSetorFromInput(input, { rebuild = false } = {}) {
 
   // Qualquer alteração de parâmetro invalida o cronograma cacheado
   state.schedule = null;
+  saveParametrosSetorToStorage(setor);
 
   if (rebuild) {
     renderCronogramaScheduleOnly();
@@ -1208,19 +1268,15 @@ function setBanner(msg, isError = false) {
   el.classList.toggle("hidden", !msg);
 }
 
-async function importFile(file) {
-  if (!file) {
-    setBanner("Selecione um arquivo CSV ou Excel…");
-    return;
-  }
-  setBanner(`Importando ${file.name}…`);
-  $("btnImport").disabled = true;
+async function loadData() {
+  setBanner("Carregando Acabado.csv e Componente.csv…");
+  $("btnReload").disabled = true;
   try {
-    state.allRows = await window.CargaParse.parseFile(file);
+    state.allRows = await window.CargaParse.loadAllData();
     const aberto = state.allRows.filter((r) => r.status === "aberto").length;
     const fechada = state.allRows.length - aberto;
     setBanner(
-      `Carregado: ${fmtNum(state.allRows.length)} operações · ${fmtNum(aberto)} aberto · ${fmtNum(fechada)} fechada · ${file.name}`
+      `Carregado: ${fmtNum(state.allRows.length)} operações · ${fmtNum(aberto)} aberto · ${fmtNum(fechada)} fechada`
     );
     rebuildDependentFilters();
     refresh();
@@ -1228,10 +1284,12 @@ async function importFile(file) {
     $("btnExport").disabled = !temAberto;
   } catch (err) {
     console.error(err);
-    setBanner(err.message || "Falha ao importar o arquivo", true);
-    $("btnExport").disabled = true;
+    setBanner(
+      `${err.message}. Sirva a pasta com um servidor local (ex.: npx --yes serve .) — abrir o HTML direto (file://) bloqueia o carregamento dos CSVs.`,
+      true
+    );
   } finally {
-    $("btnImport").disabled = !$("fileImport").files?.length;
+    $("btnReload").disabled = false;
   }
 }
 
@@ -1308,20 +1366,7 @@ function bindEvents() {
     });
   }
 
-  $("fileImport").addEventListener("change", () => {
-    const hasFile = Boolean($("fileImport").files?.length);
-    $("btnImport").disabled = !hasFile;
-    if (hasFile) {
-      setBanner(`Arquivo selecionado: ${$("fileImport").files[0].name}. Clique em Importar.`);
-    } else {
-      setBanner("Selecione um arquivo CSV ou Excel…");
-    }
-  });
-
-  $("btnImport").addEventListener("click", () => {
-    const file = $("fileImport").files?.[0];
-    importFile(file);
-  });
+  $("btnReload").addEventListener("click", () => loadData());
 
   $("btnExport").addEventListener("click", () => montarCronogramaPorSetor());
 
@@ -1332,6 +1377,7 @@ function bindEvents() {
 
 document.addEventListener("DOMContentLoaded", () => {
   $("fStart").value = todayInputValue();
+  loadParametrosSetorFromStorage();
   bindEvents();
-  setBanner("Selecione um arquivo CSV ou Excel…");
+  loadData();
 });
