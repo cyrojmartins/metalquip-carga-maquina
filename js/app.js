@@ -2,8 +2,9 @@
  * UI — filtros, resumo hierárquico, carga, operações e cronograma.
  */
 
-/** Padrão interno de Horas/Dia ao criar parâmetros de um setor (editável em Parâmetros). */
-const DEFAULT_HORAS_DIA = 8;
+/** Valores fixos padrão do sistema (Parâmetros por setor). */
+const DEFAULT_FADIGA = 20;
+const DEFAULT_HORAS_DIA = 8.8;
 
 /** Persistência local dos parâmetros cadastrados (sobrevive a reload/deploy na mesma origem). */
 const PARAMETROS_STORAGE_KEY = "metalquip.cargaMaquina.parametrosSetor";
@@ -31,15 +32,15 @@ const state = {
 
 function normalizeParametrosSetorEntry(raw) {
   if (!raw || typeof raw !== "object") return null;
-  let fadiga = Number(raw.fadiga);
   let operadores = Number(raw.operadores);
-  let horasDia = Number(raw.horasDia);
-  if (!Number.isFinite(fadiga) || fadiga < 0) fadiga = 0;
-  fadiga = Math.min(100, fadiga);
   if (!Number.isFinite(operadores) || operadores < 0) operadores = 1;
   operadores = Math.floor(operadores);
-  if (!Number.isFinite(horasDia) || horasDia < 0) horasDia = DEFAULT_HORAS_DIA;
-  return { fadiga, operadores, horasDia };
+  // % Fadiga e Horas/Dia são valores fixos do sistema
+  return {
+    fadiga: DEFAULT_FADIGA,
+    operadores,
+    horasDia: DEFAULT_HORAS_DIA,
+  };
 }
 
 function loadParametrosSetorFromStorage() {
@@ -804,7 +805,7 @@ function getParametrosSetor(nome) {
           .map((r) => r.posto)
       ).size || 1;
     state.parametrosSetor[nome] = {
-      fadiga: 0,
+      fadiga: DEFAULT_FADIGA,
       operadores:
         Number.isFinite(Number(defaultOps)) && Number(defaultOps) >= 1
           ? Math.floor(Number(defaultOps))
