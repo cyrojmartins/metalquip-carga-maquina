@@ -11,16 +11,24 @@
       <div class="brand">
         <div class="brand-kicker">Metalquip · Carga Máquina</div>
         <h1>Cronograma de Produção</h1>
-        <p>Acabado + Componente · status por Dia Operação</p>
+        <p>Importação · status por Dia Operação</p>
       </div>
       <div class="header-actions">
-        <button type="button" id="btnReload" class="secondary">Recarregar CSVs</button>
+        <label class="file-upload" for="fileImport">
+          <span class="file-upload-label">Arquivo CSV ou Excel</span>
+          <input
+            id="fileImport"
+            type="file"
+            accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          />
+        </label>
+        <button type="button" id="btnImport" class="secondary" disabled>Importar</button>
         <button type="button" id="btnExport" disabled>Exportar cronograma</button>
       </div>
     </header>
 
     <main>
-      <div id="statusBanner" class="status-banner">Carregando Acabado.csv e Componente.csv…</div>
+      <div id="statusBanner" class="status-banner">Selecione um arquivo CSV ou Excel…</div>
 
       <section class="kpis" id="kpis" aria-label="Indicadores"></section>
 
@@ -142,6 +150,7 @@
       </section>
     </main>
 
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
     <script src="js/parse.js"></script>
     <script src="js/schedule.js"></script>
     <script src="js/app.js"></script>

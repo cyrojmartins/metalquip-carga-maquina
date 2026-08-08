@@ -1,5 +1,5 @@
 /**
- * Parse e normalização dos CSVs de carga máquina (Acabado / Componente).
+ * Parse e normalização de carga máquina a partir de um único CSV ou Excel.
  */
 
 const DATE_RE = /^(\d{2})\/(\d{2})\/(\d{4})$/;
@@ -184,22 +184,94 @@ function normalizeRow(raw, tipo) {
   };
 }
 
-async function loadCsv(path, tipo) {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(`Falha ao carregar ${path}: ${res.status}`);
-  const text = await res.text();
-  const rawRows = parseCsvText(text);
-  return rawRows
-    .map((r) => normalizeRow(r, tipo))
-    .filter((r) => r.emissaoRaw && DATE_RE.test(r.emissaoRaw));
+/** Infere tipo a partir da coluna Tipo (acabado / componente), se existir. */
+function inferTipo(raw) {
+  const rawTipo = String(raw["Tipo"] ?? raw["tipo"] ?? "").trim().toLowerCase();
+  if (!rawTipo) return "";
+  if (rawTipo.includes("acabado")) return "acabado";
+  if (rawTipo.includes("componente")) return "componente";
+  return rawTipo;
 }
 
-async function loadAllData() {
-  const [acabado, componente] = await Promise.all([
-    loadCsv("Acabado.csv", "acabado"),
-    loadCsv("Componente.csv", "componente"),
-  ]);
-  return [...acabado, ...componente];
+function fileExtension(name) {
+  const m = String(name ?? "")
+    .toLowerCase()
+    .match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : "";
+}
+
+function formatBrDateFromJs(d) {
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function excelToCsvText(buffer) {
+  if (typeof XLSX === "undefined") {
+    throw new Error("Biblioteca SheetJS (XLSX) não carregada");
+  }
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) throw new Error("Planilha Excel vazia");
+  const sheet = workbook.Sheets[sheetName];
+
+  // Garante datas no formato BR dd/mm/yyyy (esperado por parseBrDate).
+  for (const key of Object.keys(sheet)) {
+    if (key[0] === "!") continue;
+    const cell = sheet[key];
+    if (!cell) continue;
+    if (cell.t === "d" && cell.v instanceof Date) {
+      const formatted = formatBrDateFromJs(cell.v);
+      cell.t = "s";
+      cell.v = formatted;
+      cell.w = formatted;
+    }
+  }
+
+  return XLSX.utils.sheet_to_csv(sheet, { FS: ";", blankrows: false });
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Falha ao ler o arquivo"));
+    reader.readAsText(file);
+  });
+}
+
+function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Falha ao ler o arquivo"));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
+ * Lê um único arquivo .csv / .xlsx / .xls e devolve linhas normalizadas.
+ * @param {File} file
+ * @returns {Promise<object[]>}
+ */
+async function parseFile(file) {
+  if (!file) throw new Error("Nenhum arquivo selecionado");
+  const ext = fileExtension(file.name);
+  let text;
+  if (ext === "csv" || file.type === "text/csv") {
+    text = await readFileAsText(file);
+  } else if (ext === "xlsx" || ext === "xls") {
+    const buffer = await readFileAsArrayBuffer(file);
+    text = excelToCsvText(buffer);
+  } else {
+    throw new Error("Formato não suportado. Use CSV ou Excel (.xlsx / .xls).");
+  }
+
+  const rawRows = parseCsvText(text);
+  return rawRows
+    .map((r) => normalizeRow(r, inferTipo(r)))
+    .filter((r) => r.emissaoRaw && DATE_RE.test(r.emissaoRaw));
 }
 
 function buildHierarchy(rows) {
@@ -314,7 +386,7 @@ function uniqueValues(rows, key) {
 }
 
 window.CargaParse = {
-  loadAllData,
+  parseFile,
   buildHierarchy,
   uniqueValues,
   parseBrDate,

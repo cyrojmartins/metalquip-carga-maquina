@@ -134,11 +134,17 @@ function renderKpis() {
   const postos = new Set(rows.map((r) => r.posto)).size;
   const pct = total ? (100 * fechada) / total : 0;
 
+  const nAcabado = rows.filter((r) => r.tipo === "acabado").length;
+  const nComponente = rows.filter((r) => r.tipo === "componente").length;
+  const temTipo = rows.some((r) => r.tipo);
+  const tipoValue = temTipo ? `${fmtNum(nAcabado)} / ${fmtNum(nComponente)}` : "—";
+  const tipoHint = temTipo ? "no filtro atual" : "sem coluna Tipo";
+
   $("kpis").innerHTML = `
     <div class="kpi"><div class="label">Operações</div><div class="value">${fmtNum(total)}</div><div class="hint">${setores} setores · ${postos} postos</div></div>
     <div class="kpi"><div class="label">Aberto</div><div class="value">${fmtNum(aberto)}</div><div class="hint">${fmtHours(horasAbertas)}</div></div>
     <div class="kpi"><div class="label">Fechada</div><div class="value">${fmtNum(fechada)}</div><div class="hint">${fmtNum(pct, 1)}% concluído</div></div>
-    <div class="kpi"><div class="label">Acabado / Comp.</div><div class="value">${fmtNum(rows.filter((r) => r.tipo === "acabado").length)} / ${fmtNum(rows.filter((r) => r.tipo === "componente").length)}</div><div class="hint">no filtro atual</div></div>
+    <div class="kpi"><div class="label">Acabado / Comp.</div><div class="value">${tipoValue}</div><div class="hint">${tipoHint}</div></div>
   `;
 }
 
@@ -1202,15 +1208,19 @@ function setBanner(msg, isError = false) {
   el.classList.toggle("hidden", !msg);
 }
 
-async function loadData() {
-  setBanner("Carregando Acabado.csv e Componente.csv…");
-  $("btnReload").disabled = true;
+async function importFile(file) {
+  if (!file) {
+    setBanner("Selecione um arquivo CSV ou Excel…");
+    return;
+  }
+  setBanner(`Importando ${file.name}…`);
+  $("btnImport").disabled = true;
   try {
-    state.allRows = await window.CargaParse.loadAllData();
+    state.allRows = await window.CargaParse.parseFile(file);
     const aberto = state.allRows.filter((r) => r.status === "aberto").length;
     const fechada = state.allRows.length - aberto;
     setBanner(
-      `Carregado: ${fmtNum(state.allRows.length)} operações · ${fmtNum(aberto)} aberto · ${fmtNum(fechada)} fechada`
+      `Carregado: ${fmtNum(state.allRows.length)} operações · ${fmtNum(aberto)} aberto · ${fmtNum(fechada)} fechada · ${file.name}`
     );
     rebuildDependentFilters();
     refresh();
@@ -1218,12 +1228,10 @@ async function loadData() {
     $("btnExport").disabled = !temAberto;
   } catch (err) {
     console.error(err);
-    setBanner(
-      `${err.message}. Sirva a pasta com um servidor local (ex.: npx --yes serve .) — abrir o HTML direto (file://) bloqueia o carregamento dos CSVs.`,
-      true
-    );
+    setBanner(err.message || "Falha ao importar o arquivo", true);
+    $("btnExport").disabled = true;
   } finally {
-    $("btnReload").disabled = false;
+    $("btnImport").disabled = !$("fileImport").files?.length;
   }
 }
 
@@ -1300,7 +1308,20 @@ function bindEvents() {
     });
   }
 
-  $("btnReload").addEventListener("click", () => loadData());
+  $("fileImport").addEventListener("change", () => {
+    const hasFile = Boolean($("fileImport").files?.length);
+    $("btnImport").disabled = !hasFile;
+    if (hasFile) {
+      setBanner(`Arquivo selecionado: ${$("fileImport").files[0].name}. Clique em Importar.`);
+    } else {
+      setBanner("Selecione um arquivo CSV ou Excel…");
+    }
+  });
+
+  $("btnImport").addEventListener("click", () => {
+    const file = $("fileImport").files?.[0];
+    importFile(file);
+  });
 
   $("btnExport").addEventListener("click", () => montarCronogramaPorSetor());
 
@@ -1312,5 +1333,5 @@ function bindEvents() {
 document.addEventListener("DOMContentLoaded", () => {
   $("fStart").value = todayInputValue();
   bindEvents();
-  loadData();
+  setBanner("Selecione um arquivo CSV ou Excel…");
 });
