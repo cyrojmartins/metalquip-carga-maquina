@@ -19,6 +19,7 @@ const state = {
   operadoresPorSetor: {},
   parametrosSetor: {},
   expandedCargaSetores: new Set(),
+  expandedCronDias: new Set(),
   activeTab: "resumo",
   sort: {
     resumo: { key: "horasAbertas", dir: "desc" },
@@ -697,30 +698,51 @@ function ensureSchedule() {
   return state.schedule;
 }
 
-function renderSetorOpsTable(setor) {
-  const rows = [];
-  let totalTempoSeg = 0;
-  for (const day of setor.days) {
-    for (const op of day.ops) {
+function cronDiaKey(setorNome, day) {
+  const dataRaw =
+    day.data != null
+      ? window.CargaSchedule.formatDate(day.data)
+      : day.label || "";
+  return `${setorNome}::${dataRaw}`;
+}
+
+function opMatchesCronFilter(op, search) {
+  if (!search) return true;
+  const os = op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`;
+  const hay = `${os} ${op.codigo || ""} ${op.descricao || ""} ${op.posto || ""} ${op.operacao || ""}`.toLowerCase();
+  return hay.includes(search);
+}
+
+function opTempoTotalSeg(op) {
+  return op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0);
+}
+
+function summarizeDayOps(ops) {
+  let tempoSeg = 0;
+  let horas = 0;
+  let qtdLote = 0;
+  for (const op of ops) {
+    tempoSeg += opTempoTotalSeg(op);
+    horas += Number(op.tempoHoras) || 0;
+    qtdLote += Number(op.qtdLote) || 0;
+  }
+  return { ops: ops.length, tempoSeg, horas, qtdLote };
+}
+
+function renderDayOpsDetailRows(ops) {
+  return ops
+    .map((op) => {
       const os = op.osFull || `${op.osBase}-${String(op.seq).padStart(2, "0")}`;
       const tempoOper = op.tempoOper ?? 0;
-      const tempoTotal = op.tempoSeg ?? (op.qtdLote || 0) * tempoOper;
-      totalTempoSeg += tempoTotal;
-      const dayLabel =
-        day.label || (day.data ? window.CargaSchedule.weekdayLabel(day.data) : "");
-      const dataRaw =
-        op.dataAgendaRaw ||
-        (day.data ? window.CargaSchedule.formatDate(day.data) : "");
+      const tempoTotal = opTempoTotalSeg(op);
       const tipoLabel =
         op.tipo === "acabado"
           ? "Acabado"
           : op.tipo === "componente"
             ? "Componente"
             : op.tipo || "—";
-      rows.push(`
+      return `
         <tr${op.oversized ? ' class="oversized"' : ""}>
-          <td>${escapeHtml(dayLabel)}</td>
-          <td class="center">${escapeHtml(dataRaw)}</td>
           <td>${escapeHtml(tipoLabel)}</td>
           <td class="mono">${escapeHtml(os)}</td>
           <td class="codigo-item">${escapeHtml(op.codigo || "—")}</td>
@@ -730,42 +752,101 @@ function renderSetorOpsTable(setor) {
           <td class="num">${fmtNum(tempoTotal, 0)}</td>
           <td>${escapeHtml(op.posto || "—")}</td>
           <td class="num">${fmtHours(op.tempoHoras)}</td>
-        </tr>`);
-    }
+        </tr>`;
+    })
+    .join("");
+}
+
+function renderSetorOpsTable(setor) {
+  const search = ($("fCronOs")?.value || "").trim().toLowerCase();
+  const dayBlocks = [];
+
+  for (const day of setor.days) {
+    const ops = (day.ops || []).filter((op) => opMatchesCronFilter(op, search));
+    if (!ops.length) continue;
+
+    const dayLabel =
+      day.label || (day.data ? window.CargaSchedule.weekdayLabel(day.data) : "Dia");
+    const dataRaw =
+      day.data != null
+        ? window.CargaSchedule.formatDate(day.data)
+        : ops[0]?.dataAgendaRaw || "—";
+    const dataCurta = dataRaw.includes("/")
+      ? dataRaw.slice(0, 5)
+      : dataRaw;
+    const key = cronDiaKey(setor.setor, day);
+    const open = state.expandedCronDias.has(key);
+    const sum = summarizeDayOps(ops);
+
+    const detail = open
+      ? `
+      <div class="schedule-day-detail table-wrap">
+        <table class="data schedule-ops">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Nº Ord.Serviço</th>
+              <th>Código Item</th>
+              <th>Descrição do Item</th>
+              <th class="num">Qtd.Lote</th>
+              <th class="num">Tempo Oper (s)</th>
+              <th class="num">Tempo total (s)</th>
+              <th>Posto</th>
+              <th class="num">Horas</th>
+            </tr>
+          </thead>
+          <tbody>${renderDayOpsDetailRows(ops)}</tbody>
+          <tfoot>
+            <tr class="schedule-day-total">
+              <td colspan="4"><strong>Total do dia ${escapeHtml(dataCurta)}</strong></td>
+              <td class="num"><strong>${fmtNum(sum.qtdLote, 0)}</strong></td>
+              <td></td>
+              <td class="num"><strong>${fmtNum(sum.tempoSeg, 0)}</strong></td>
+              <td></td>
+              <td class="num"><strong>${fmtHours(sum.horas)}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`
+      : "";
+
+    dayBlocks.push(`
+      <div class="schedule-day${open ? " is-open" : ""}">
+        <button type="button" class="schedule-day-toggle" data-expand-cron-dia="${escapeAttr(key)}" aria-expanded="${open}">
+          <span class="toggle">${open ? "−" : "+"}</span>
+          <span class="schedule-day-title">
+            <strong>Dia ${escapeHtml(dataCurta)}</strong>
+            <span class="muted">${escapeHtml(dayLabel)}</span>
+          </span>
+          <span class="schedule-day-sum">
+            ${fmtNum(sum.ops)} ops · ${fmtNum(sum.tempoSeg, 0)} s · ${fmtHours(sum.horas)}
+            <span class="muted">· total do dia</span>
+          </span>
+        </button>
+        ${detail}
+      </div>`);
   }
 
-  if (!rows.length) {
-    return `<div class="empty schedule-empty">Sem operações neste setor.</div>`;
+  if (!dayBlocks.length) {
+    return `<div class="empty schedule-empty">${
+      search
+        ? "Nenhuma operação neste setor para o filtro atual."
+        : "Sem operações neste setor."
+    }</div>`;
   }
+
+  const allOps = setor.days.flatMap((d) =>
+    (d.ops || []).filter((op) => opMatchesCronFilter(op, search))
+  );
+  const setorSum = summarizeDayOps(allOps);
 
   return `
-    <div class="table-wrap schedule-table-wrap">
-      <table class="data schedule-ops">
-        <thead>
-          <tr>
-            <th>Dia</th>
-            <th class="center">Data</th>
-            <th>Tipo</th>
-            <th>Nº Ord.Serviço</th>
-            <th>Código Item</th>
-            <th>Descrição do Item</th>
-            <th class="num">Qtd.Lote</th>
-            <th class="num">Tempo Oper (s)</th>
-            <th class="num">Tempo total (s)</th>
-            <th>Posto</th>
-            <th class="num">Horas</th>
-          </tr>
-        </thead>
-        <tbody>${rows.join("")}</tbody>
-        <tfoot>
-          <tr class="schedule-total">
-            <td colspan="8"><strong>Total</strong></td>
-            <td class="num"><strong>${fmtNum(totalTempoSeg, 0)}</strong></td>
-            <td></td>
-            <td class="num"><strong>${fmtHours(setor.totalHoras)}</strong></td>
-          </tr>
-        </tfoot>
-      </table>
+    <div class="schedule-days">
+      ${dayBlocks.join("")}
+      <div class="schedule-setor-total">
+        <strong>Total do setor</strong>
+        <span>${fmtNum(setorSum.ops)} ops · ${fmtNum(setorSum.tempoSeg, 0)} s · ${fmtHours(setorSum.horas)}</span>
+      </div>
     </div>`;
 }
 
@@ -946,6 +1027,7 @@ function updateParametrosSetorFromInput(input, { rebuild = false } = {}) {
 function renderCronogramaScheduleOnly() {
   const sch = ensureSchedule();
   let bySetor = window.CargaSchedule.groupBySetor(sch);
+  const search = ($("fCronOs")?.value || "").trim().toLowerCase();
 
   if (state.sort.cronograma.key === "setor") {
     bySetor = sortItems(bySetor, "setor", state.sort.cronograma.dir, {
@@ -961,11 +1043,47 @@ function renderCronogramaScheduleOnly() {
     });
   }
 
+  if (search) {
+    bySetor = bySetor
+      .map((setor) => {
+        const days = setor.days
+          .map((day) => {
+            const ops = (day.ops || []).filter((op) => opMatchesCronFilter(op, search));
+            return {
+              ...day,
+              ops,
+              horas: ops.reduce((a, op) => a + (Number(op.tempoHoras) || 0), 0),
+            };
+          })
+          .filter((day) => day.ops.length);
+        const totalOps = days.reduce((a, d) => a + d.ops.length, 0);
+        const totalHoras = days.reduce((a, d) => a + d.horas, 0);
+        const totalTempoSeg = days.reduce(
+          (a, d) => a + d.ops.reduce((s, op) => s + opTempoTotalSeg(op), 0),
+          0
+        );
+        return { ...setor, days, totalOps, totalHoras, totalTempoSeg };
+      })
+      .filter((setor) => setor.totalOps > 0);
+  }
+
   $("btnExport").disabled = !sch.scheduled.length;
   $("cronMeta").textContent = `${fmtNum(sch.scheduled.length)} agendadas · ${fmtNum(sch.blocked.length)} fora do horizonte · ${bySetor.length} setores · capac. = horas disponíveis/dia (Parâmetros)`;
 
+  const workDays = sch.workDays || [];
+  const dataInicial =
+    workDays.length > 0 ? window.CargaSchedule.formatDate(workDays[0]) : "—";
+  const dataFinal =
+    workDays.length > 0
+      ? window.CargaSchedule.formatDate(workDays[workDays.length - 1])
+      : "—";
+
   if (!bySetor.length) {
-    $("cronGrid").innerHTML = `<div class="empty">Nada a agendar no filtro/horizonte atual.</div>`;
+    $("cronGrid").innerHTML = `<div class="empty">${
+      search
+        ? "Nada encontrado no filtro atual do cronograma."
+        : "Nada a agendar no filtro/horizonte atual."
+    }</div>`;
     return;
   }
 
@@ -975,12 +1093,7 @@ function renderCronogramaScheduleOnly() {
         setor.totalTempoSeg != null
           ? setor.totalTempoSeg
           : setor.days.reduce(
-              (a, d) =>
-                a +
-                d.ops.reduce(
-                  (s, op) => s + (op.tempoSeg ?? (op.qtdLote || 0) * (op.tempoOper || 0)),
-                  0
-                ),
+              (a, d) => a + d.ops.reduce((s, op) => s + opTempoTotalSeg(op), 0),
               0
             );
       const capacH = getCapacidadeDiaSetor(setor.setor);
@@ -989,13 +1102,14 @@ function renderCronogramaScheduleOnly() {
           <div class="schedule-setor-head">
             <h2>${escapeHtml(setor.setor)}</h2>
             <span>${fmtNum(setor.totalOps)} ops · ${fmtNum(totalSeg, 0)} s · ${fmtHours(setor.totalHoras)} · capac. ${fmtHours(capacH)}/dia (disponível)</span>
+            <span class="schedule-setor-period">Data Inicial: ${escapeHtml(dataInicial)} · Data final: ${escapeHtml(dataFinal)}</span>
           </div>
           ${renderSetorOpsTable(setor)}
         </section>`;
     })
     .join("");
 
-  if (sch.blocked.length) {
+  if (sch.blocked.length && !search) {
     const sample = sch.blocked
       .slice(0, 8)
       .map((b) => `${b.osFull} (${b.motivo})`)
@@ -1008,6 +1122,22 @@ function renderCronogramaScheduleOnly() {
   }
 
   $("cronGrid").innerHTML = html;
+}
+
+function setCronDiasExpanded(expand) {
+  const sch = ensureSchedule();
+  const bySetor = window.CargaSchedule.groupBySetor(sch);
+  const search = ($("fCronOs")?.value || "").trim().toLowerCase();
+  for (const setor of bySetor) {
+    for (const day of setor.days) {
+      const ops = (day.ops || []).filter((op) => opMatchesCronFilter(op, search));
+      if (!ops.length) continue;
+      const key = cronDiaKey(setor.setor, day);
+      if (expand) state.expandedCronDias.add(key);
+      else state.expandedCronDias.delete(key);
+    }
+  }
+  renderCronogramaScheduleOnly();
 }
 
 function renderCronograma() {
@@ -1094,6 +1224,10 @@ function filterSummaryForPrint() {
     const os = ($("fCargaOs")?.value || "").trim();
     if (os) parts.push(`Filtro OS: ${os}`);
   }
+  if (state.activeTab === "cronograma") {
+    const os = ($("fCronOs")?.value || "").trim();
+    if (os) parts.push(`Filtro cronograma: ${os}`);
+  }
   return parts.length ? parts.join(" · ") : "Sem filtros aplicados";
 }
 
@@ -1101,6 +1235,10 @@ function printTab(tabName) {
   const cfg = PRINT_TABS[tabName];
   if (!cfg) return;
   if (state.activeTab !== tabName) setTab(tabName);
+
+  if (tabName === "cronograma") {
+    setCronDiasExpanded(true);
+  }
 
   const bodyEl = $(cfg.bodyId);
   const metaEl = $(cfg.metaId);
@@ -1144,6 +1282,10 @@ function printTab(tabName) {
     .load-block, .schedule-setor, .tree-ops-wrap, table.data, table.schedule-ops { break-inside: avoid; }
     .load-toggle .toggle { display: none !important; }
     .load-toggle { pointer-events: none; border: none; background: transparent; padding: 0; color: inherit; }
+    .schedule-day-toggle .toggle { display: none !important; }
+    .schedule-day-toggle { pointer-events: none; cursor: default; }
+    .schedule-day-detail { max-height: none !important; overflow: visible !important; }
+    .cron-schedule-panel { max-height: none !important; overflow: visible !important; }
     @media print {
       body { padding: 0; }
       .no-print { display: none !important; }
@@ -1352,8 +1494,20 @@ function bindEvents() {
   });
 
   $("cronGrid").addEventListener("click", (e) => {
-    handleSortClick(e);
+    if (handleSortClick(e)) return;
+    const btn = e.target.closest("[data-expand-cron-dia]");
+    if (!btn) return;
+    const key = btn.getAttribute("data-expand-cron-dia");
+    if (state.expandedCronDias.has(key)) state.expandedCronDias.delete(key);
+    else state.expandedCronDias.add(key);
+    renderCronogramaScheduleOnly();
   });
+
+  $("fCronOs")?.addEventListener("input", () => {
+    if (state.activeTab === "cronograma") renderCronogramaScheduleOnly();
+  });
+  $("btnCronExpandAll")?.addEventListener("click", () => setCronDiasExpanded(true));
+  $("btnCronCollapseAll")?.addEventListener("click", () => setCronDiasExpanded(false));
 
   const setoresEl = $("cronSetoresTable");
   if (setoresEl) {

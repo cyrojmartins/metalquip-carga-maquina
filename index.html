@@ -60,6 +60,9 @@
             <option value="2" selected>2</option>
             <option value="3">3</option>
             <option value="4">4</option>
+            <option value="6">6</option>
+            <option value="8">8</option>
+            <option value="12">12</option>
           </select>
         </div>
         <div class="filter-group">
@@ -126,6 +129,16 @@
             <span class="muted" id="cronMeta"></span>
           </div>
           <button type="button" class="secondary btn-print" data-print-tab="cronograma">Imprimir</button>
+        </div>
+        <div class="carga-toolbar padded cron-toolbar">
+          <label class="carga-filter" for="fCronOs">
+            <span>Filtrar no cronograma</span>
+            <input id="fCronOs" class="input" type="search" placeholder="Nº OS, código, descrição ou posto" />
+          </label>
+          <div class="cron-expand-actions">
+            <button type="button" class="secondary" id="btnCronExpandAll">Expandir dias</button>
+            <button type="button" class="secondary" id="btnCronCollapseAll">Recolher dias</button>
+          </div>
         </div>
         <div class="cron-schedule-panel" id="cronGrid"></div>
       </section>
