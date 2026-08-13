@@ -71,7 +71,7 @@
         </div>
         <div class="filter-group">
           <label for="fWeeks">Horizonte (semanas)</label>
-          <select id="fWeeks" class="select" title="Aplica em Carga por setor e Cronograma">
+          <select id="fWeeks" class="select" title="Aplica em Cronograma semanal">
             <option value="1">1</option>
             <option value="2" selected>2</option>
             <option value="3">3</option>
@@ -93,7 +93,6 @@
 
       <nav class="tabs" role="tablist">
         <button type="button" class="tab active" data-tab="resumo">Resumo por setor</button>
-        <button type="button" class="tab" data-tab="carga">Carga por setor</button>
         <button type="button" class="tab" data-tab="carga-maquina">Carga máquina</button>
         <button type="button" class="tab" data-tab="ops">Operações</button>
         <button type="button" class="tab" data-tab="cronograma">Cronograma semanal</button>
@@ -109,23 +108,6 @@
           <button type="button" class="secondary btn-print" data-print-tab="resumo">Imprimir</button>
         </div>
         <div class="panel-body" id="resumoTree"></div>
-      </section>
-
-      <section id="tab-carga" class="panel tab-panel hidden">
-        <div class="panel-head">
-          <div class="panel-head-text">
-            <h2>Horas abertas vs. capacidade do horizonte</h2>
-            <span class="muted" id="cargaMeta"></span>
-          </div>
-          <button type="button" class="secondary btn-print" data-print-tab="carga">Imprimir</button>
-        </div>
-        <div class="carga-toolbar padded">
-          <label class="carga-filter" for="fCargaOs">
-            <span>Filtrar OS no setor</span>
-            <input id="fCargaOs" class="input" type="search" placeholder="Nº OS, código ou descrição" />
-          </label>
-        </div>
-        <div class="panel-body padded" id="cargaList"></div>
       </section>
 
       <section id="tab-carga-maquina" class="panel tab-panel hidden">
