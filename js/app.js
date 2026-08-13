@@ -137,7 +137,121 @@ function fillSelect(el, values, keepEmpty = true) {
   if ([...el.options].some((o) => o.value === current)) el.value = current;
 }
 
-function applyFilters() {
+const MONTH_NAMES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+function rowMonthKey(r) {
+  if (!r.emissao) return null;
+  return r.emissao.getFullYear() * 100 + (r.emissao.getMonth() + 1);
+}
+
+function formatMonthKey(key) {
+  const year = Math.floor(key / 100);
+  const month = key % 100;
+  if (month < 1 || month > 12) return String(key);
+  return `${MONTH_NAMES[month - 1]}/${year}`;
+}
+
+function getMesMode() {
+  return $("fMesMode")?.value || "todos";
+}
+
+function getSelectedMonthKeys() {
+  const mode = getMesMode();
+  if (mode === "todos") return null;
+  if (mode === "um") {
+    const v = Number($("fMesOne")?.value);
+    return Number.isFinite(v) && v > 0 ? new Set([v]) : new Set();
+  }
+  if (mode === "alguns") {
+    const keys = [...document.querySelectorAll("#fMesSome input[type=checkbox]:checked")]
+      .map((el) => Number(el.value))
+      .filter((k) => Number.isFinite(k) && k > 0);
+    return new Set(keys);
+  }
+  return null;
+}
+
+function rowMatchesMonthFilter(r) {
+  const keys = getSelectedMonthKeys();
+  if (keys === null) return true;
+  if (!keys.size) return false;
+  const mk = rowMonthKey(r);
+  if (mk == null) return false;
+  return keys.has(mk);
+}
+
+function monthFilterSummary() {
+  const mode = getMesMode();
+  if (mode === "todos") return "";
+  if (mode === "um") {
+    const v = Number($("fMesOne")?.value);
+    return v ? `Mês: ${formatMonthKey(v)}` : "";
+  }
+  if (mode === "alguns") {
+    const keys = getSelectedMonthKeys();
+    if (!keys?.size) return "Meses: nenhum selecionado";
+    return `Meses: ${[...keys]
+      .sort((a, b) => a - b)
+      .map(formatMonthKey)
+      .join(", ")}`;
+  }
+  return "";
+}
+
+function updateMesFilterVisibility() {
+  const mode = getMesMode();
+  $("fMesOneWrap")?.classList.toggle("hidden", mode !== "um");
+  $("fMesSomeWrap")?.classList.toggle("hidden", mode !== "alguns");
+}
+
+function rebuildMonthFilterOptions() {
+  const keys = new Set();
+  for (const r of state.allRows) {
+    const mk = rowMonthKey(r);
+    if (mk) keys.add(mk);
+  }
+  const sorted = [...keys].sort((a, b) => a - b);
+  const prevOne = $("fMesOne")?.value;
+  const prevSome = new Set(
+    [...document.querySelectorAll("#fMesSome input[type=checkbox]:checked")].map((el) => el.value)
+  );
+
+  const oneEl = $("fMesOne");
+  if (oneEl) {
+    oneEl.innerHTML = sorted
+      .map((k) => `<option value="${k}">${escapeHtml(formatMonthKey(k))}</option>`)
+      .join("");
+    if (prevOne && sorted.includes(Number(prevOne))) oneEl.value = prevOne;
+    else if (sorted.length) oneEl.value = String(sorted[sorted.length - 1]);
+  }
+
+  const someEl = $("fMesSome");
+  if (someEl) {
+    someEl.innerHTML = sorted
+      .map((k) => {
+        const checked = prevSome.has(String(k)) ? " checked" : "";
+        return `<label class="mes-check-item"><input type="checkbox" value="${k}"${checked} /><span>${escapeHtml(formatMonthKey(k))}</span></label>`;
+      })
+      .join("");
+  }
+
+  updateMesFilterVisibility();
+}
+
+function matchesRowFilters(r, { skipStatus = false } = {}) {
   const tipo = $("fTipo").value;
   const setor = $("fSetor").value;
   const posto = $("fPosto").value;
@@ -145,21 +259,24 @@ function applyFilters() {
   const status = $("fStatus").value;
   const search = ($("fSearch").value || "").trim().toLowerCase();
 
-  state.filtered = state.allRows.filter((r) => {
-    if (tipo && r.tipo !== tipo) return false;
-    if (setor && r.setor !== setor) return false;
-    if (posto && r.posto !== posto) return false;
-    if (operador) {
-      const op = r.operador || "(sem operador)";
-      if (op !== operador) return false;
-    }
-    if (status && r.status !== status) return false;
-    if (search) {
-      const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
-      if (!hay.includes(search)) return false;
-    }
-    return true;
-  });
+  if (tipo && r.tipo !== tipo) return false;
+  if (setor && r.setor !== setor) return false;
+  if (posto && r.posto !== posto) return false;
+  if (operador) {
+    const op = r.operador || "(sem operador)";
+    if (op !== operador) return false;
+  }
+  if (!skipStatus && status && r.status !== status) return false;
+  if (!rowMatchesMonthFilter(r)) return false;
+  if (search) {
+    const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
+    if (!hay.includes(search)) return false;
+  }
+  return true;
+}
+
+function applyFilters() {
+  state.filtered = state.allRows.filter((r) => matchesRowFilters(r));
 }
 
 function rebuildDependentFilters() {
@@ -554,6 +671,240 @@ function renderCarga() {
     .join("")}</div>`;
 }
 
+const CARGA_MAQUINA_MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function cargaMaquinaMonthKey(date) {
+  return date.getFullYear() * 100 + (date.getMonth() + 1);
+}
+
+function cargaMaquinaMonthLabel(date) {
+  return CARGA_MAQUINA_MONTHS[date.getMonth()];
+}
+
+/** Relatório Carga Máquina — usa os mesmos filtros globais (incl. mês e status). */
+function getCargaMaquinaRows() {
+  return state.filtered.filter((r) => r.emissao);
+}
+
+function buildCargaMaquinaGroups(rows) {
+  const bySetor = new Map();
+
+  for (const r of rows) {
+    if (!bySetor.has(r.setor)) bySetor.set(r.setor, new Map());
+    const mk = cargaMaquinaMonthKey(r.emissao);
+    const months = bySetor.get(r.setor);
+    if (!months.has(mk)) {
+      months.set(mk, {
+        monthKey: mk,
+        label: cargaMaquinaMonthLabel(r.emissao),
+        osSet: new Set(),
+        tempoSeg: 0,
+      });
+    }
+    const bucket = months.get(mk);
+    bucket.osSet.add(r.osFull);
+    bucket.tempoSeg += r.tempoSeg;
+  }
+
+  return [...bySetor.keys()]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"))
+    .map((setor) => {
+      const monthsMap = bySetor.get(setor);
+      const monthRows = [...monthsMap.values()]
+        .sort((a, b) => a.monthKey - b.monthKey)
+        .map((m) => {
+          const tempoHrs = m.tempoSeg / 3600;
+          return {
+            label: m.label,
+            qtdeOs: m.osSet.size,
+            tempoSeg: m.tempoSeg,
+            tempoHrs,
+          };
+        });
+
+      const calc = calcParametrosSetor(getParametrosSetor(setor));
+      const hrDisp = calc.horasDisponiveis;
+      const nMonthRows = monthRows.length;
+
+      for (const row of monthRows) {
+        row.hrDisp = hrDisp;
+        row.qtdeDias = hrDisp != null && hrDisp > 0 ? row.tempoHrs / hrDisp : null;
+      }
+
+      const total = {
+        qtdeOs: monthRows.reduce((acc, row) => acc + row.qtdeOs, 0),
+        tempoSeg: monthRows.reduce((acc, row) => acc + row.tempoSeg, 0),
+        tempoHrs: monthRows.reduce((acc, row) => acc + row.tempoHrs, 0),
+        qtdeDias: monthRows.reduce((acc, row) => acc + (row.qtdeDias ?? 0), 0),
+      };
+
+      return { setor, hrDisp, monthRows, total, rowSpan: nMonthRows + 1 };
+    });
+}
+
+function fmtCargaMaquinaCell(value, digits = 2) {
+  if (value == null || !Number.isFinite(value)) return "";
+  return fmtNum(value, digits);
+}
+
+function renderCargaMaquina() {
+  const el = $("cargaMaquinaList");
+  const meta = $("cargaMaquinaMeta");
+  if (!el) return;
+
+  const rows = getCargaMaquinaRows();
+  const groups = buildCargaMaquinaGroups(rows);
+
+  const status = $("fStatus").value;
+  const statusLabel = status ? (status === "aberto" ? "Aberto" : "Fechada") : "Todos";
+  const mesLabel = monthFilterSummary();
+  if (meta) {
+    const parts = [];
+    if (groups.length) {
+      parts.push(`${fmtNum(groups.length)} setor${groups.length === 1 ? "" : "es"}`);
+    }
+    parts.push(`Status: ${statusLabel}`);
+    if (mesLabel) parts.push(mesLabel);
+    if (groups.length) parts.push(`${fmtNum(rows.length)} operações`);
+    meta.textContent = parts.join(" · ");
+  }
+
+  if (!groups.length) {
+    el.innerHTML = `<div class="empty">Nenhuma operação com emissão válida para o status selecionado.</div>`;
+    return;
+  }
+
+  const body = groups
+    .map((g, groupIdx) => {
+      const gapRow =
+        groupIdx > 0
+          ? `<tr class="carga-maquina-gap" aria-hidden="true"><td colspan="7"></td></tr>`
+          : "";
+
+      const monthHtml = g.monthRows
+        .map((row, idx) => {
+          const setorCell =
+            idx === 0
+              ? `<td class="setor-cell" rowspan="${g.rowSpan}">${escapeHtml(g.setor)}</td>`
+              : "";
+          const hrDispCell =
+            idx === 0 && g.hrDisp != null
+              ? `<td class="num hr-disp-cell" rowspan="${g.monthRows.length}">${fmtCargaMaquinaCell(g.hrDisp)}</td>`
+              : idx === 0
+                ? `<td class="num hr-disp-cell" rowspan="${g.monthRows.length}"></td>`
+                : "";
+
+          return `
+        <tr>
+          ${setorCell}
+          <td class="mes-cell">${escapeHtml(row.label)}</td>
+          <td class="num">${fmtCargaMaquinaCell(row.qtdeOs)}</td>
+          <td class="num">${fmtCargaMaquinaCell(row.tempoSeg)}</td>
+          <td class="num">${fmtCargaMaquinaCell(row.tempoHrs)}</td>
+          ${hrDispCell}
+          <td class="num">${fmtCargaMaquinaCell(row.qtdeDias)}</td>
+        </tr>`;
+        })
+        .join("");
+
+      const totalRow = `
+        <tr class="carga-maquina-total">
+          <td class="mes-cell total-label">${escapeHtml(g.setor)} Total</td>
+          <td class="num">${fmtCargaMaquinaCell(g.total.qtdeOs)}</td>
+          <td class="num">${fmtCargaMaquinaCell(g.total.tempoSeg)}</td>
+          <td class="num">${fmtCargaMaquinaCell(g.total.tempoHrs)}</td>
+          <td class="num"></td>
+          <td class="num carga-maquina-highlight">${fmtCargaMaquinaCell(g.total.qtdeDias)}</td>
+        </tr>`;
+
+      return gapRow + monthHtml + totalRow;
+    })
+    .join("");
+
+  el.innerHTML = `
+    <table class="data carga-maquina-report">
+      <thead>
+        <tr>
+          <th>Setor da Fábrica</th>
+          <th>Meses</th>
+          <th class="num">Qtde de OS</th>
+          <th class="num">T. Produção Seg.</th>
+          <th class="num">T. Produção Hrs</th>
+          <th class="num">Hr Disponível dia</th>
+          <th class="num">Qtde dias Produção</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
+function buildCargaMaquinaPrintHtml(groups) {
+  const tableHead = `
+        <thead>
+          <tr>
+            <th>Meses</th>
+            <th class="num">Qtde de OS</th>
+            <th class="num">T. Produção Seg.</th>
+            <th class="num">T. Produção Hrs</th>
+            <th class="num">Hr Disponível dia</th>
+            <th class="num">Qtde dias Produção</th>
+          </tr>
+        </thead>`;
+
+  const sectorBlocks = groups
+    .map((g, idx) => {
+      const monthHtml = g.monthRows
+        .map((row, rowIdx) => {
+          const hrDispCell =
+            rowIdx === 0 && g.hrDisp != null
+              ? `<td class="num hr-disp-cell" rowspan="${g.monthRows.length}">${fmtCargaMaquinaCell(g.hrDisp)}</td>`
+              : rowIdx === 0
+                ? `<td class="num hr-disp-cell" rowspan="${g.monthRows.length}"></td>`
+                : "";
+
+          return `
+          <tr>
+            <td class="mes-cell">${escapeHtml(row.label)}</td>
+            <td class="num">${fmtCargaMaquinaCell(row.qtdeOs)}</td>
+            <td class="num">${fmtCargaMaquinaCell(row.tempoSeg)}</td>
+            <td class="num">${fmtCargaMaquinaCell(row.tempoHrs)}</td>
+            ${hrDispCell}
+            <td class="num">${fmtCargaMaquinaCell(row.qtdeDias)}</td>
+          </tr>`;
+        })
+        .join("");
+
+      const totalRow = `
+          <tr class="carga-maquina-total">
+            <td class="mes-cell total-label">${escapeHtml(g.setor)} Total</td>
+            <td class="num">${fmtCargaMaquinaCell(g.total.qtdeOs)}</td>
+            <td class="num">${fmtCargaMaquinaCell(g.total.tempoSeg)}</td>
+            <td class="num">${fmtCargaMaquinaCell(g.total.tempoHrs)}</td>
+            <td class="num"></td>
+            <td class="num carga-maquina-highlight">${fmtCargaMaquinaCell(g.total.qtdeDias)}</td>
+          </tr>`;
+
+      const gap =
+        idx > 0 ? `<div class="carga-maquina-setor-gap" aria-hidden="true"></div>` : "";
+
+      return `${gap}
+      <section class="carga-maquina-setor-block">
+        <h2 class="carga-maquina-setor-title">${escapeHtml(g.setor)}</h2>
+        <table class="data carga-maquina-report">
+          ${tableHead}
+          <tbody>${monthHtml}${totalRow}</tbody>
+        </table>
+      </section>`;
+    })
+    .join("");
+
+  return `
+    <div class="carga-maquina-print">
+      <h1 class="carga-maquina-print-title">Relatório de Carga Máquina.</h1>
+      <div class="carga-maquina-print-body">${sectorBlocks}</div>
+    </div>`;
+}
+
 function renderOps() {
   const showApontado = $("fStatus").value !== "aberto";
   const opsGetters = {
@@ -654,28 +1005,12 @@ function renderOps() {
 
 function ensureSchedule() {
   const weeks = Number($("fWeeks").value) || 2;
-  const postoFilter = $("fPosto").value || null;
-  const tipo = $("fTipo").value;
-  const setor = $("fSetor").value;
-  const operador = $("fOperador").value;
-  const search = ($("fSearch").value || "").trim().toLowerCase();
 
-  // Cronograma sempre agenda abertas; respeita demais filtros da UI.
+  // Cronograma sempre agenda abertas; respeita demais filtros da UI (incl. mês).
   // Precedência (OS seq) usa o universo completo em allRows.
   const openRows = state.allRows.filter((r) => {
     if (r.status !== "aberto") return false;
-    if (tipo && r.tipo !== tipo) return false;
-    if (setor && r.setor !== setor) return false;
-    if (postoFilter && r.posto !== postoFilter) return false;
-    if (operador) {
-      const op = r.operador || "(sem operador)";
-      if (op !== operador) return false;
-    }
-    if (search) {
-      const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
-      if (!hay.includes(search)) return false;
-    }
-    return true;
+    return matchesRowFilters(r, { skipStatus: true });
   });
 
   syncOperadoresFromParametros();
@@ -852,25 +1187,10 @@ function renderSetorOpsTable(setor) {
 
 /** Lista setores identificados (ops abertas no filtro atual do cronograma). */
 function listSetoresIdentificados() {
-  const tipo = $("fTipo").value;
-  const setor = $("fSetor").value;
-  const posto = $("fPosto").value;
-  const operador = $("fOperador").value;
-  const search = ($("fSearch").value || "").trim().toLowerCase();
   const set = new Set();
   for (const r of state.allRows) {
     if (r.status !== "aberto") continue;
-    if (tipo && r.tipo !== tipo) continue;
-    if (setor && r.setor !== setor) continue;
-    if (posto && r.posto !== posto) continue;
-    if (operador) {
-      const op = r.operador || "(sem operador)";
-      if (op !== operador) continue;
-    }
-    if (search) {
-      const hay = `${r.osFull} ${r.osBase} ${r.codigo} ${r.descricao} ${r.operacao}`.toLowerCase();
-      if (!hay.includes(search)) continue;
-    }
+    if (!matchesRowFilters(r, { skipStatus: true })) continue;
     set.add(r.setor);
   }
   return [...set].sort((a, b) => a.localeCompare(b, "pt-BR"));
@@ -1018,6 +1338,10 @@ function updateParametrosSetorFromInput(input, { rebuild = false } = {}) {
   // Qualquer alteração de parâmetro invalida o cronograma cacheado
   state.schedule = null;
   saveParametrosSetorToStorage(setor);
+
+  if (state.activeTab === "carga-maquina") {
+    renderCargaMaquina();
+  }
 
   if (rebuild) {
     renderCronogramaScheduleOnly();
@@ -1198,6 +1522,11 @@ const PRINT_TABS = {
     bodyId: "cronSetoresTable",
     metaId: "cronSetoresMeta",
   },
+  "carga-maquina": {
+    title: "Carga Máquina",
+    bodyId: "cargaMaquinaList",
+    metaId: "cargaMaquinaMeta",
+  },
 };
 
 function filterSummaryForPrint() {
@@ -1208,11 +1537,13 @@ function filterSummaryForPrint() {
   const operador = $("fOperador").value;
   const status = $("fStatus").value;
   const search = ($("fSearch").value || "").trim();
+  const mes = monthFilterSummary();
   if (tipo) parts.push(`Tipo: ${tipo}`);
   if (setor) parts.push(`Setor: ${setor}`);
   if (posto) parts.push(`Posto: ${posto}`);
   if (operador) parts.push(`Operador: ${operador}`);
   if (status) parts.push(`Status: ${status}`);
+  if (mes) parts.push(mes);
   if (search) parts.push(`Busca: ${search}`);
   if (state.activeTab === "carga" || state.activeTab === "cronograma") {
     parts.push(`Horizonte: ${$("fWeeks").value} sem.`);
@@ -1244,10 +1575,22 @@ function printTab(tabName) {
   const metaEl = $(cfg.metaId);
   if (!bodyEl) return;
 
-  const content = bodyEl.innerHTML.trim();
-  if (!content || content.includes('class="empty"')) {
-    setBanner(`Nada para imprimir em “${cfg.title}”.`, true);
-    return;
+  let content;
+  let isCargaMaquinaPrint = tabName === "carga-maquina";
+
+  if (isCargaMaquinaPrint) {
+    const groups = buildCargaMaquinaGroups(getCargaMaquinaRows());
+    if (!groups.length) {
+      setBanner(`Nada para imprimir em “${cfg.title}”.`, true);
+      return;
+    }
+    content = buildCargaMaquinaPrintHtml(groups);
+  } else {
+    content = bodyEl.innerHTML.trim();
+    if (!content || content.includes('class="empty"')) {
+      setBanner(`Nada para imprimir em “${cfg.title}”.`, true);
+      return;
+    }
   }
 
   const cssHref = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
@@ -1267,7 +1610,7 @@ function printTab(tabName) {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>${escapeHtml(cfg.title)} — Metalquip</title>
+  <title>${isCargaMaquinaPrint ? "Relatório de Carga Máquina." : `${escapeHtml(cfg.title)} — Metalquip`}</title>
   ${cssHref.map((h) => `<link rel="stylesheet" href="${h}" />`).join("\n  ")}
   <style>
     body { background: #fff; margin: 0; padding: 16px 20px 28px; }
@@ -1286,6 +1629,38 @@ function printTab(tabName) {
     .schedule-day-toggle { pointer-events: none; cursor: default; }
     .schedule-day-detail { max-height: none !important; overflow: visible !important; }
     .cron-schedule-panel { max-height: none !important; overflow: visible !important; }
+    .carga-maquina-print-title {
+      margin: 0 0 2rem;
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: #2f4a63;
+    }
+    .carga-maquina-print-body { margin-top: 0; }
+    .carga-maquina-setor-block {
+      border: 1px solid #333;
+      padding: 12px 14px 14px;
+      break-inside: avoid;
+    }
+    .carga-maquina-setor-title {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #2f4a63;
+    }
+    .carga-maquina-setor-gap {
+      height: 1.25rem;
+    }
+    .carga-maquina-setor-block table.carga-maquina-report {
+      width: 100%;
+      margin: 0;
+    }
+    .carga-maquina-setor-block .carga-maquina-total td {
+      font-weight: 700;
+    }
+    .sub { margin: 0; color: #5c6570; font-size: 0.85rem; }
+    .carga-maquina-print-meta {
+      margin-top: 1.5rem;
+    }
     @media print {
       body { padding: 0; }
       .no-print { display: none !important; }
@@ -1293,13 +1668,18 @@ function printTab(tabName) {
   </style>
 </head>
 <body>
-  <header class="print-head">
+  ${
+    isCargaMaquinaPrint
+      ? `<div class="print-body">${content}</div>
+  <p class="sub carga-maquina-print-meta">${escapeHtml(filters)} · Impresso em ${escapeHtml(printedAt)}</p>`
+      : `<header class="print-head">
     <h1>Metalquip — ${escapeHtml(cfg.title)}</h1>
     <p class="sub">${escapeHtml(meta)}</p>
     <p class="sub">${escapeHtml(filters)}</p>
     <p class="sub">Impresso em ${escapeHtml(printedAt)}</p>
   </header>
-  <div class="print-body">${content}</div>
+  <div class="print-body">${content}</div>`
+  }
   <script>
     window.addEventListener("load", function () {
       setTimeout(function () {
@@ -1321,6 +1701,7 @@ function refresh() {
   if (state.activeTab === "ops") renderOps();
   if (state.activeTab === "cronograma") renderCronograma();
   if (state.activeTab === "parametros") renderParametrosSetores();
+  if (state.activeTab === "carga-maquina") renderCargaMaquina();
 }
 
 function setTab(name) {
@@ -1422,6 +1803,7 @@ async function loadData() {
       `Carregado: ${fmtNum(state.allRows.length)} operações · ${fmtNum(aberto)} aberto · ${fmtNum(fechada)} fechada`
     );
     rebuildDependentFilters();
+    rebuildMonthFilterOptions();
     refresh();
     const temAberto = state.allRows.some((r) => r.status === "aberto");
     $("btnExport").disabled = !temAberto;
@@ -1442,6 +1824,14 @@ function bindEvents() {
       if (id === "fTipo" || id === "fSetor" || id === "fPosto") rebuildDependentFilters();
       refresh();
     });
+  });
+  $("fMesMode")?.addEventListener("change", () => {
+    updateMesFilterVisibility();
+    refresh();
+  });
+  $("fMesOne")?.addEventListener("change", () => refresh());
+  $("fMesSome")?.addEventListener("change", (e) => {
+    if (e.target.matches('input[type="checkbox"]')) refresh();
   });
   $("fSearch").addEventListener("input", () => refresh());
 
@@ -1534,5 +1924,6 @@ document.addEventListener("DOMContentLoaded", () => {
   $("fStart").value = todayInputValue();
   loadParametrosSetorFromStorage();
   bindEvents();
+  updateMesFilterVisibility();
   loadData();
 });

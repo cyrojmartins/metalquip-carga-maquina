@@ -54,6 +54,22 @@
           </select>
         </div>
         <div class="filter-group">
+          <label for="fMesMode">Mês</label>
+          <select id="fMesMode" class="select">
+            <option value="todos">Todos os meses</option>
+            <option value="um">Um mês</option>
+            <option value="alguns">Alguns meses</option>
+          </select>
+        </div>
+        <div class="filter-group hidden" id="fMesOneWrap">
+          <label for="fMesOne">Selecione o mês</label>
+          <select id="fMesOne" class="select"></select>
+        </div>
+        <div class="filter-group filter-group-mes-some hidden" id="fMesSomeWrap">
+          <span class="filter-label">Selecione os meses</span>
+          <div id="fMesSome" class="mes-checklist" role="group" aria-label="Meses"></div>
+        </div>
+        <div class="filter-group">
           <label for="fWeeks">Horizonte (semanas)</label>
           <select id="fWeeks" class="select">
             <option value="1">1</option>
@@ -78,6 +94,7 @@
       <nav class="tabs" role="tablist">
         <button type="button" class="tab active" data-tab="resumo">Resumo por setor</button>
         <button type="button" class="tab" data-tab="carga">Carga por setor</button>
+        <button type="button" class="tab" data-tab="carga-maquina">Carga máquina</button>
         <button type="button" class="tab" data-tab="ops">Operações</button>
         <button type="button" class="tab" data-tab="cronograma">Cronograma semanal</button>
         <button type="button" class="tab" data-tab="parametros">Parâmetros por setor</button>
@@ -109,6 +126,17 @@
           </label>
         </div>
         <div class="panel-body padded" id="cargaList"></div>
+      </section>
+
+      <section id="tab-carga-maquina" class="panel tab-panel hidden">
+        <div class="panel-head">
+          <div class="panel-head-text">
+            <h2>Carga Máquina</h2>
+            <span class="muted" id="cargaMaquinaMeta"></span>
+          </div>
+          <button type="button" class="secondary btn-print" data-print-tab="carga-maquina">Imprimir</button>
+        </div>
+        <div class="panel-body table-wrap" id="cargaMaquinaList"></div>
       </section>
 
       <section id="tab-ops" class="panel tab-panel hidden">

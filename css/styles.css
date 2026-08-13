@@ -197,6 +197,40 @@ main {
   min-width: 160px;
 }
 
+.filter-group .filter-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.filter-group-mes-some {
+  min-width: 200px;
+  max-width: 280px;
+}
+
+.mes-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.mes-check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  user-select: none;
+}
+
 .tabs {
   display: flex;
   gap: 0.35rem;
@@ -1008,4 +1042,53 @@ table.setor-params .param-calc {
   .cron-expand-actions {
     width: 100%;
   }
+}
+
+/* Relatório Carga Máquina */
+table.carga-maquina-report th:first-child {
+  background: #d6e4f0;
+  color: var(--text);
+}
+
+table.carga-maquina-report th {
+  background: #c8ced4;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.78rem;
+}
+
+table.carga-maquina-report td.num,
+table.carga-maquina-report th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.carga-maquina-report td.setor-cell {
+  vertical-align: top;
+  font-weight: 600;
+  background: #eef2f6;
+  white-space: normal;
+  max-width: 200px;
+}
+
+table.carga-maquina-report tr.carga-maquina-gap td {
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+table.carga-maquina-report tr.carga-maquina-total td {
+  border-top: 2px solid #b8c0c8;
+  background: #fff;
+  font-weight: 600;
+}
+
+table.carga-maquina-report tr.carga-maquina-total td.total-label {
+  text-align: left;
+}
+
+table.carga-maquina-report td.carga-maquina-highlight {
+  background: #ffff00;
 }
