@@ -157,6 +157,24 @@ function rowMonthKey(r) {
   return r.emissao.getFullYear() * 100 + (r.emissao.getMonth() + 1);
 }
 
+/** Mês com mais operações — usado como padrão em "Um mês". */
+function getDefaultMonthKey(rows = state.allRows) {
+  const counts = new Map();
+  for (const r of rows) {
+    const mk = rowMonthKey(r);
+    if (mk) counts.set(mk, (counts.get(mk) || 0) + 1);
+  }
+  let best = null;
+  let bestN = -1;
+  for (const [mk, n] of counts) {
+    if (n > bestN) {
+      bestN = n;
+      best = mk;
+    }
+  }
+  return best;
+}
+
 function formatMonthKey(key) {
   const year = Math.floor(key / 100);
   const month = key % 100;
@@ -173,13 +191,13 @@ function getSelectedMonthKeys() {
   if (mode === "todos") return null;
   if (mode === "um") {
     const v = Number($("fMesOne")?.value);
-    return Number.isFinite(v) && v > 0 ? new Set([v]) : new Set();
+    return Number.isFinite(v) && v > 0 ? new Set([v]) : null;
   }
   if (mode === "alguns") {
     const keys = [...document.querySelectorAll("#fMesSome input[type=checkbox]:checked")]
       .map((el) => Number(el.value))
       .filter((k) => Number.isFinite(k) && k > 0);
-    return new Set(keys);
+    return keys.length ? new Set(keys) : null;
   }
   return null;
 }
@@ -187,7 +205,6 @@ function getSelectedMonthKeys() {
 function rowMatchesMonthFilter(r) {
   const keys = getSelectedMonthKeys();
   if (keys === null) return true;
-  if (!keys.size) return false;
   const mk = rowMonthKey(r);
   if (mk == null) return false;
   return keys.has(mk);
@@ -198,17 +215,38 @@ function monthFilterSummary() {
   if (mode === "todos") return "";
   if (mode === "um") {
     const v = Number($("fMesOne")?.value);
-    return v ? `Mês: ${formatMonthKey(v)}` : "";
+    return v ? `Mês: ${formatMonthKey(v)}` : "Mês: selecione abaixo";
   }
   if (mode === "alguns") {
     const keys = getSelectedMonthKeys();
-    if (!keys?.size) return "Meses: nenhum selecionado";
+    if (!keys) return "Meses: selecione abaixo";
     return `Meses: ${[...keys]
       .sort((a, b) => a - b)
       .map(formatMonthKey)
       .join(", ")}`;
   }
   return "";
+}
+
+/** Resumo dos filtros globais ativos (para meta e mensagens vazias). */
+function globalFilterSummary() {
+  const parts = [];
+  const tipo = $("fTipo")?.value;
+  const setor = $("fSetor")?.value;
+  const posto = $("fPosto")?.value;
+  const operador = $("fOperador")?.value;
+  const status = $("fStatus")?.value;
+  const search = ($("fSearch")?.value || "").trim();
+  const mes = monthFilterSummary();
+
+  if (tipo) parts.push(`Tipo: ${tipo === "acabado" ? "Acabado" : "Componente"}`);
+  if (setor) parts.push(`Setor: ${setor}`);
+  if (posto) parts.push(`Posto: ${posto}`);
+  if (operador) parts.push(`Operador: ${operador}`);
+  if (status) parts.push(`Status: ${status === "aberto" ? "Aberto" : "Fechada"}`);
+  if (mes) parts.push(mes);
+  if (search) parts.push(`Busca: ${search}`);
+  return parts;
 }
 
 function updateMesFilterVisibility() {
@@ -235,7 +273,10 @@ function rebuildMonthFilterOptions() {
       .map((k) => `<option value="${k}">${escapeHtml(formatMonthKey(k))}</option>`)
       .join("");
     if (prevOne && sorted.includes(Number(prevOne))) oneEl.value = prevOne;
-    else if (sorted.length) oneEl.value = String(sorted[sorted.length - 1]);
+    else if (sorted.length) {
+      const preferred = getDefaultMonthKey();
+      oneEl.value = String(preferred && sorted.includes(preferred) ? preferred : sorted[0]);
+    }
   }
 
   const someEl = $("fMesSome");
@@ -757,20 +798,23 @@ function renderCargaMaquina() {
 
   const status = $("fStatus").value;
   const statusLabel = status ? (status === "aberto" ? "Aberto" : "Fechada") : "Todos";
-  const mesLabel = monthFilterSummary();
+  const filterParts = globalFilterSummary();
   if (meta) {
     const parts = [];
     if (groups.length) {
       parts.push(`${fmtNum(groups.length)} setor${groups.length === 1 ? "" : "es"}`);
     }
-    parts.push(`Status: ${statusLabel}`);
-    if (mesLabel) parts.push(mesLabel);
+    if (filterParts.length) parts.push(...filterParts);
+    else parts.push(`Status: ${statusLabel}`);
     if (groups.length) parts.push(`${fmtNum(rows.length)} operações`);
     meta.textContent = parts.join(" · ");
   }
 
   if (!groups.length) {
-    el.innerHTML = `<div class="empty">Nenhuma operação com emissão válida para o status selecionado.</div>`;
+    const hint = filterParts.length
+      ? ` Filtros: ${filterParts.join(" · ")}.`
+      : "";
+    el.innerHTML = `<div class="empty">Nenhuma operação encontrada com os filtros atuais.${hint}</div>`;
     return;
   }
 
@@ -900,7 +944,6 @@ function buildCargaMaquinaPrintHtml(groups) {
 
   return `
     <div class="carga-maquina-print">
-      <h1 class="carga-maquina-print-title">Relatório de Carga Máquina.</h1>
       <div class="carga-maquina-print-body">${sectorBlocks}</div>
     </div>`;
 }
@@ -1530,21 +1573,7 @@ const PRINT_TABS = {
 };
 
 function filterSummaryForPrint() {
-  const parts = [];
-  const tipo = $("fTipo").value;
-  const setor = $("fSetor").value;
-  const posto = $("fPosto").value;
-  const operador = $("fOperador").value;
-  const status = $("fStatus").value;
-  const search = ($("fSearch").value || "").trim();
-  const mes = monthFilterSummary();
-  if (tipo) parts.push(`Tipo: ${tipo}`);
-  if (setor) parts.push(`Setor: ${setor}`);
-  if (posto) parts.push(`Posto: ${posto}`);
-  if (operador) parts.push(`Operador: ${operador}`);
-  if (status) parts.push(`Status: ${status}`);
-  if (mes) parts.push(mes);
-  if (search) parts.push(`Busca: ${search}`);
+  const parts = globalFilterSummary();
   if (state.activeTab === "carga" || state.activeTab === "cronograma") {
     parts.push(`Horizonte: ${$("fWeeks").value} sem.`);
   }
@@ -1629,11 +1658,45 @@ function printTab(tabName) {
     .schedule-day-toggle { pointer-events: none; cursor: default; }
     .schedule-day-detail { max-height: none !important; overflow: visible !important; }
     .cron-schedule-panel { max-height: none !important; overflow: visible !important; }
-    .carga-maquina-print-title {
-      margin: 0 0 2rem;
+    .carga-maquina-running-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 0 20px 0.5rem;
+      background: #fff;
+      border-bottom: 1px solid #d0d5db;
+    }
+    .carga-maquina-running-header h1 {
+      margin: 0;
       font-size: 1.35rem;
       font-weight: 700;
       color: #2f4a63;
+    }
+    .carga-maquina-running-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 0.35rem 20px 0.5rem;
+      background: #fff;
+      border-top: 1px solid #d0d5db;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #5c6570;
+    }
+    .carga-maquina-running-footer::after {
+      content: "Página " counter(page);
+    }
+    .carga-maquina-print-shell {
+      padding: 3.25rem 0 2rem;
+    }
+    .carga-maquina-print-first-meta {
+      margin: 0 0 1.5rem;
+      color: #5c6570;
+      font-size: 0.85rem;
     }
     .carga-maquina-print-body { margin-top: 0; }
     .carga-maquina-setor-block {
@@ -1658,20 +1721,33 @@ function printTab(tabName) {
       font-weight: 700;
     }
     .sub { margin: 0; color: #5c6570; font-size: 0.85rem; }
-    .carga-maquina-print-meta {
-      margin-top: 1.5rem;
+    @page {
+      margin: 22mm 12mm 16mm;
     }
     @media print {
       body { padding: 0; }
       .no-print { display: none !important; }
+      .carga-maquina-print-shell {
+        padding: 0;
+      }
+      .carga-maquina-running-header,
+      .carga-maquina-running-footer {
+        background: #fff;
+      }
     }
   </style>
 </head>
 <body>
   ${
     isCargaMaquinaPrint
-      ? `<div class="print-body">${content}</div>
-  <p class="sub carga-maquina-print-meta">${escapeHtml(filters)} · Impresso em ${escapeHtml(printedAt)}</p>`
+      ? `<header class="carga-maquina-running-header">
+    <h1>Relatório de Carga Máquina.</h1>
+  </header>
+  <footer class="carga-maquina-running-footer" aria-hidden="true"></footer>
+  <div class="carga-maquina-print-shell">
+    <p class="carga-maquina-print-first-meta">${escapeHtml(filters)} · Impresso em ${escapeHtml(printedAt)}</p>
+    <div class="print-body">${content}</div>
+  </div>`
       : `<header class="print-head">
     <h1>Metalquip — ${escapeHtml(cfg.title)}</h1>
     <p class="sub">${escapeHtml(meta)}</p>
@@ -1820,20 +1896,23 @@ async function loadData() {
 
 function bindEvents() {
   ["fTipo", "fSetor", "fPosto", "fOperador", "fStatus", "fWeeks", "fStart"].forEach((id) => {
-    $(id).addEventListener("change", () => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener("change", () => {
       if (id === "fTipo" || id === "fSetor" || id === "fPosto") rebuildDependentFilters();
       refresh();
     });
   });
   $("fMesMode")?.addEventListener("change", () => {
     updateMesFilterVisibility();
+    if (getMesMode() === "um" && !$("fMesOne")?.value) rebuildMonthFilterOptions();
     refresh();
   });
   $("fMesOne")?.addEventListener("change", () => refresh());
   $("fMesSome")?.addEventListener("change", (e) => {
     if (e.target.matches('input[type="checkbox"]')) refresh();
   });
-  $("fSearch").addEventListener("input", () => refresh());
+  $("fSearch")?.addEventListener("input", () => refresh());
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => setTab(tab.dataset.tab));
